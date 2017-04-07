@@ -1,0 +1,1183 @@
+\chapter{Discussion}
+\label{chapt:discussion}
+
+\section{Main results}
+
+\subsection{Neural cepstral coefficients}
+
+The most important and somewhat surprising result
+from the NCC model
+is that NCCs can yield significantly
+better training and test correctness rates than MFCCs,
+which are the most commonly used
+feature vector in ASR systems.
+Our goal in these experiments was to
+show that NCCs are as good as MFCCs,
+as the primary motivation behind
+NCCs is to generate a feature vector
+entirely in spiking neurons,
+therefore making it suitable
+for use in Sermo
+and in neuromorphic systems using
+silicon cochleas.
+The fact that they yielded
+better accuracy rates
+is promising,
+though it should be kept in mind
+that these results
+are from classification through
+an ideal statistical linear SVM classifier,
+rather than through
+a full continuous ASR system.
+It remains to be seen
+whether NCCs will be successful
+in that more realistic setting.
+
+One advantage of NCCs is that
+no explicit normalization is required,
+as shown in Section~\ref{sec:results-ncc},
+where it was determined
+that NCCs are best used
+without z-scoring, unlike MFCCs.
+It is important to note, however,
+that NCCs do still employ a method
+of normalization;
+spiking neurons have a refractory period,
+meaning that they have a strict maximum firing rate,
+which puts a limit on the
+decoded output of an ensemble.
+Unlike MFCCs, however,
+this normalization is applied
+for every step in the pipeline,
+rather than just once at the end.
+It is possible that
+the normalization inherent in
+spiking neural networks
+is responsible for the improved performance
+compared to MFCCs.
+
+While a similar argument could be made
+for why adding derivatives had
+a deleterious effect on
+NCC test accuracy,
+it is also possible that
+using offline SVM classification
+is responsible for decreased performance.
+Having many more features
+may make the supervised learning procedure
+more difficult,
+or perhaps since we have the full history,
+the derivative is redundant
+and makes it more difficult
+to linearly separate data,
+or makes overfitting more likely.
+
+We view the final NCC experiment,
+in which the auditory periphery model was varied,
+as being the main contribution
+of this model.
+Because the model bridges the gap
+between detailed auditory periphery models
+and automatic speech recognition systems,
+we are able to do apples-to-apples comparisons
+of how well the periphery models
+process realistic speech samples.
+In general, the more realistic the model,
+the better it is for speech,
+with the notable exception of the Gammatone filter,
+which is the least realistic,
+cheapest to compute,
+yet as accurate as
+the most complicated Tan Carney model.
+
+There are two reasons why we might
+be skeptical of the impressive Gammatone results.
+For one, the determination of good parameter sets
+in the other experiments in Section~\ref{sec:results-ncc}
+all used the Gammatone filter.
+It is possible that performing the same
+experiments with other filters
+would find parameters sets that
+allow those auditory periphery models
+to perform as well or better than
+the Gammatone filter.
+Additionally, arguably the most difficult part
+of continuous ASR systems is
+determining where phone boundaries lie,
+rather than classifying pre-segmented phones.
+While we believe that the experiments
+performed in Section~\ref{sec:results-ncc}
+are a useful comparison between MFCCs and NCCs,
+some of the benefits of more sophisticated models
+like the Tan Carney model
+may lie in their ability to segment speech.
+The same argument holds
+for adaptive neuron types;
+while they may not be essential
+for differentiating between pre-segmented speech samples,
+they may be essential for
+segmenting continuous speech.
+Looking at the impact of these
+NCC representation choices
+in a continuous ASR system
+is therefore an important next step.
+
+\subsection{Syllable sequencing and production}
+
+The syllable sequencing and production model
+can generate production information trajectories
+of several seconds in length
+from a mental syllabary of size four,
+and those trajectories can result in
+intelligible speech when synthesized
+with the VocalTractLab articulatory synthesizer.
+
+It is surprising that the model is able
+to perform at relatively high speeds
+(2.5--6.5~Hz),
+but has trouble with lower speeds.
+We believe the source of this difficulty
+is in the sequencer network.
+When a syllable is about to end,
+the sequencer network
+switches the gating signal
+and starts the reset signal,
+effectively starting the
+DMP network associated with the next syllable,
+while also pushing the current syllable's
+DMP network to the starting position.
+When frequencies are high,
+the drive to the starting position
+is approximately the same as the
+intrinsic dynamics, so the system
+moves as expected.
+However, for low frequencies,
+the additional drive in the current syllable
+forces it to finish the current syllable
+too quickly.
+
+The results in Figure~\ref{fig:prod-n_syllables}
+are surprising because syllables
+not taking part in a sequence
+should be completely inhibited,
+and therefore should not affect the
+operation of other syllable DMPs.
+Yet, a large number of deletions
+occur when the syllabary has
+four or more syllables.
+While we believe that the SPA modules
+are the source of these insertions
+(due to the relatively low
+dimensionality of syllable representations
+used in the experiment),
+further inspection of these models
+is crucial to scaling it to large vocabularies.
+
+While the production network is able to produce
+discrete vocal tract gesture trajectories successfully,
+DMPs were created for continuous control problems,
+and deal with continuous trajectories
+more naturally.
+In Chapter~\ref{chapt:model},
+we noted that the choice between discrete
+and continuous production information
+is an empirical one.
+While we have not ruled out discrete
+vocal tract gestures
+as a production information representation,
+we should still investigate whether
+continuous trajectories are
+more natural for the methods
+employed in the syllable sequencing and production model.
+
+The final neural model employs neural inhibition
+in several key areas
+(see Figure~\ref{fig:prod-network}).
+While employing neural inhibition was not
+an explicit goal in the design process,
+inhibition provides a method for
+making qualitative behavioral changes rapidly,
+and therefore was used when such changes
+were necessary.
+Having neural inhibition
+as one of the tools
+at a modeler's disposal
+provides another concrete benefit
+of using spiking neural models
+over other modeling techniques.
+
+One process in the model that
+required significant effort
+was the translation from
+a recorded production information trajectory
+to a gesture score.
+The approach using temporal derivatives
+works well,
+but is parameterized with a few parameters
+which were chosen through a manual process
+rather than through an
+automatic optimization process.
+It would be worth looking at the
+gesture score reconstruction algorithm
+in more detail to examine if
+an improved algorithm changes
+the accuracy results,
+or the quality of synthesized speech.
+
+Finally, it is important to emphasize that
+this model captures the end result
+of some learning process,
+which continues to operate
+even in adulthood.
+One possible way forward for this model
+is to begin with its current state,
+and use NEF-based learning techniques
+(e.g., \citealt{macneil2011,bekolay2013a})
+to fine-tune its performance based on
+sensory feedback.
+
+\subsection{Syllable recognition}
+
+The syllable recognition model
+successfully addresses the main criteria
+influencing its design.
+The model is able to classify trajectories
+with relatively high degrees of freedom
+(at least seven)
+that advance non-uniformly through time,
+and that occur in a continuous stream
+with no segmentation signals.
+
+One of the biggest limitations
+of the syllable recognition model
+in its current state
+is its sensitivity to the
+frequency of the syllable
+(see Figure~\ref{fig:recog-freq}).
+Like the production model,
+it performs poorly for
+slow syllables,
+yielding a large number of insertions
+(although it could be argued that
+repeated identification of the correct
+syllable is acceptable).
+Unlike the production model,
+performance is best at around 1.8~Hz,
+then monotonically worsens
+for higher frequencies.
+As mentioned previously,
+we believe that the decreased accuracy
+is due to a coupling between
+the speed of the syllable
+and other parameters in the model
+(e.g., the scale).
+In other words, the iDMPs
+must progress their state forward
+at a higher rate when
+the syllable is voiced at a higher rate.
+Methods for estimating speech rate
+should therefore be investigated
+and used to dynamically modify
+the effective scale
+depending on the overall speech rate.
+Interestingly, \citet{pasley2012}
+also suggested that the human auditory system
+contains nonlinearities that depend
+on speech rates
+(see Section~\ref{sec:recog-neurobio}).
+
+The poor results of the model
+with increased numbers
+of syllables in the syllabary
+indicate that the competition
+introduced to isolate a relatively small
+number of iDMPs is insufficient
+to allow only one syllable iDMP to be active.
+However, the model does operate well
+with few syllables,
+and many syllables are similar
+and would often be confused by humans
+if they did not use linguistic context.
+Therefore, we conclude that
+the iDMP networks are still suitable
+for trajectory classification,
+but may not necessarily be used in a
+drift-diffusion style classification system
+in which the first iDMP to reach
+a threshold value makes a classification.
+Instead, we aim to explore a model in which
+the sensorimotor integration system
+would allow the iDMPs to continuously operate,
+and integrate the information from those iDMPs
+as well as information from other sources
+(including top-down linguistic influences)
+to make a final determination
+of the uttered syllable
+(when necessary).
+Aside from sensorimotor learning,
+it is possible that
+this type of syllable classifier
+may only be used in cases where
+the linguistic systems
+disambiguate between two similar choices.
+
+\section{Comparison to existing models}
+
+Currently, it is difficult to make
+apples-to-apples comparisons between
+the models presented in this thesis
+and other models,
+especially those in the speech literature.
+The models that are well known and discussed
+in speech literature are traditional
+connectionist models,
+which provide interesting theoretical predictions,
+but are not functional models
+that can replicate speech function.
+On the other hand, artificial intelligence
+has adopted statistical methods
+for speech recognition and synthesis,
+which work well in practice,
+but contribute little
+to speech theory.
+We hope that the neural models presented
+in this thesis bridge the gap
+between productive and theoretically interesting models
+by solving recognition and synthesis problems
+with methods that can be directly related
+to linguistic and neuroscientific theories.
+
+Putting aside the general argument
+that all of the models in this thesis
+are implemented with spiking neurons,
+there are still useful comparisons
+to make with the previous work
+surveyed in Chapter~\ref{chapt:previouswork}.
+
+For the NCC model, explicit comparisons were made
+with the commonly used MFCC feature vector
+as part of its evaluation.
+Surprisingly, NCCs
+are better suited than MFCCs
+for classifying pre-segmented phones.
+While there are many other variants of
+MFCCs using Gammatone and other auditory filters,
+we could not find any MFCC variants
+that gave state-of-the-art results on
+a large speech corpus like TIMIT.
+Instead, the motivation for using
+more biologically realistic
+auditory filters is that
+they are more noise robust,
+and so the studies using these filters
+use speech data sets that are either naturally noisy,
+or have noise added to it.
+As the NCC model is the first
+that I am aware of to show
+an improvement with
+a subset of pre-segmented TIMIT,
+it will be revealing
+to use NCCs in a
+continuous online ASR system.
+
+For the syllable sequencing model,
+the syllable sequences
+are far more temporally flexible
+and large scale than the sequencing methods
+reviewed in Section~\ref{sec:prev-sequencing},
+except for the OSE model,
+which we adapt for our sequencing model.
+Our additions to the sequencing model
+do not add anything useful for
+solving the general problem
+of serial list memory,
+but are useful in other situations
+that require rapid iteration
+through a list of symbols,
+which may be common
+in highly learned actions
+driven by cortical networks
+rather than the
+cortex-basal ganglia-thalamus-cortex loop.
+As such, we will extract
+this aspect of the model out
+in order to make it more approachable
+for other researchers using the SPA
+to generate symbol sequences.
+
+For trajectory generation,
+it is not yet clear
+the exact comparison between DMPs
+and Task Dynamics.
+At their core, the two techniques
+are remarkably similar.
+In the trajectory generation model,
+we only use the canonical system
+and forcing function of the DMP;
+however, a more robust mapping
+from the production information trajectory
+to articulator positions in
+the VocalTractLab synthesizer
+would also take into account
+the DMP's point attractors.\footnote{
+  In general, a tighter integration with
+  VocalTractLab would improve aspects
+  of the model significantly;
+  unfortunately, VocalTractLab
+  is currently not an open source program,
+  making integration more difficult.}
+Making a more robust motor expansion system
+and providing articulator positions
+to VocalTractLab,
+rather than a gesture score,
+could improve synthesized speech quality.
+Similarly, it would be worth
+attempting a neural implementation
+of Task Dynamics in order to
+compare the two approaches
+using the same methods.
+
+For trajectory classification,
+the iDMP is a novel trajectory classification technique
+which warrants further investigation
+outside of the context of a neural model.
+Some early experiments using a non-neural
+version of the model were successful in
+classifying toy problems;
+however, it remains to be seen
+whether it could be used in
+gesture recognition systems
+with high accuracy,
+like HMM-based methods and the GVF algorithm.
+
+\section{Contributions}
+
+As this thesis draws on theories
+and techniques from a myriad of fields,
+it also attempts to make contributions
+to many of those fields.
+While a general contribution to each field
+is relating the concepts in that field
+to concepts in other fields,
+we also note specific contributions
+for several fields.
+
+\subsection{Contributions to computer science}
+
+Progress in machine learning
+has been accelerated significantly
+through the existence of
+benchmark data sets with
+easily reproducible
+state-of-the-art results
+(e.g., the MNIST data set,
+which is now solved better
+by machine vision algorithms than humans).
+However, one issue with benchmarks
+is that they can lead to myopic advances
+which eke out one or two more
+accuracy points with little
+context of how the improvement
+might generalize to other problems,
+or how it could play a role
+in a larger integrated system.
+
+I believe that we make two contributions
+to machine learning through
+providing a novel benchmark data set,
+and an integrated system that can
+be used to benchmark how algorithmic choices
+affect other systems.
+First, we intend to release a data set
+consisting of time-aligned
+vocal tract gesture trajectories
+and speech samples synthesized
+by the VocalTractLab synthesizer.
+As previously discussed,
+data sets like the
+X-ray microbeam database \citep{westbury1990}
+and MNGU0 \citep{steiner2012}
+provide data sets
+consisting of time-aligned
+vocal tract articulator positions
+and speech samples.
+However, I am aware of no available data set
+of time-aligned vocal tract gestures
+and speech samples.
+We theorize in Sermo
+that production information
+is decoded from auditory features.
+In order to determine whether
+that production information
+could take the form of vocal tract gestures,
+we will release the
+gesture trajectory data set
+so that machine learning researchers
+can apply statistical methods
+to determine if the acoustic signal
+has enough information to decode
+vocal tract gestures.
+
+Additionally, we theorize in Sermo
+that the lexical decoding process
+often used in ASR systems
+is a necessary component
+of the speech system.
+By providing a conceptual framework
+through which to contextualize
+the lexical decoding process,
+machine learning researchers can
+see how an ASR system might fit into
+a biologically plausible speech system.
+As was shown in the comparison
+between auditory periphery models,
+integrated systems like Sermo
+enable comparisons between related techniques
+on the basis of its role in a larger system,
+rather than its ability to match
+an accuracy rating on a benchmark problem.
+
+Outside of benchmarking, the NCC
+feature vector representation
+may be useful for
+general automatic speech recognition,
+a subfield of artificial intelligence.
+The iDMP algorithm
+introduced in this thesis is likely to be
+applicable to gesture recognition,
+a field of interest to human-computer interaction
+and machine learning researchers.
+
+\subsection{Contributions to linguistics}
+
+While Sermo summarizes a large body of
+linguistics research with terminology
+that should be understandable for
+computer scientists,
+the theories embodied in Sermo
+are not novel in the context of linguistics.
+However, it may be instructive to see
+linguistic theories
+discussed with computational
+and neurobiological terms.
+
+Our primary contribution to linguistics
+is a method for connecting speech
+to higher-level linguistic concepts.
+Previously, \citet{blouw2013,blouw2015,stewart2015}
+have explored solutions to
+syntactic and semantic problems
+using the Semantic Pointer Architecture (SPA).
+We propose that audio signals
+can be mapped to semantic pointers
+through an auditory feature extraction
+and linguistic decoding step.
+The linguistic decoding may also be informed
+by production information
+and syllable classifications,
+which are also represented with semantic pointers.
+
+\subsection{Contributions to neural modeling}
+
+We make two main contributions to
+large-scale neural modeling using the NEF and SPA:
+connecting spiking neural networks
+to the domain of speech,
+and associative memories using
+temporal inputs and outputs.
+
+The models presented in this thesis
+are the first instances (to my knowledge)
+of incorporating the sensory and motor
+aspects of speech into the NEF
+through Nengo.
+The NCC model processes speech online
+using auditory periphery models
+constructed with Brian Hears.
+The speech sequencing and production model
+produces audio speech samples
+using the VocalTractLab articulatory synthesizer.
+The addition of these sensors and actuators
+enables new avenues
+for large-scale neural modeling research.
+For example,
+one could envision a version of Spaun
+that uses audio inputs and outputs
+rather than vision and handwritten digits.
+
+The SPA deals with symbol-like representations
+using high-dimensional vector spaces.
+Currently, the semantic pointers
+associated with concepts are
+static vectors that can be manipulated
+through the merging and binding operators,
+among other operations.
+However, the concepts represented in speech
+are not static.
+In order to deal with the temporal nature of speech,
+we presented temporal output associative memories
+and temporal input associative memories.
+Temporal output associative memories
+generate continuously varying output signals
+from semantic pointer representations
+using DMPs.
+They provide a robust link between the discrete,
+symbolic world of high-level representations
+that can be flexibly combined
+and the continuous, subsymbolic world
+of low-level representations that must
+be precisely timed.
+Temporal input associative memories
+map a continuously varying input signal
+to semantic pointer classifications
+using iDMPs.
+They provide an analogous link between
+continuously varying low-level sensory inputs
+and high-level symbolic representations.
+While we have introduced these networks
+to deal with speech,
+they can also be used for other
+situations where temporal information
+is important (e.g., video analysis,
+general motor control).
+
+\section{Predictions}
+
+Sermo and the systems of Sermo modeled in this thesis
+are in early stages,
+primarily informed by existing
+theories and models.
+As such, we embody many of the predictions made
+by these theories and models.
+While the predictive power of Sermo
+will develop as the models develop,
+we can nevertheless make some predictions
+based on the models presented in this thesis
+as they currently exist.
+
+\subsection{Role of the auditory periphery in speech perception}
+
+In Section~\ref{sec:results-periphmodel} we showed
+that more complicated auditory periphery models
+achieved better phone correctness rates
+than simpler models
+(with the exception of the Gammatone filter).
+We therefore predict that
+the nonlinear effects modeled
+in the dynamic compressive Gammachirp
+and Tan Carney auditory filter models
+are important for perceiving speech.
+
+Similarly, we showed that using adaptive LIF neurons
+did not affect the phone correctness rate.
+However, it is usually the case that
+adaptive neuron models fire fewer action potentials
+than do non-adaptive models like the LIF neuron.
+The adaptive LIF fires more action potentials
+during the onset of a signal,
+but then fires fewer action potentials
+as it adapts to that signal.
+We therefore predict that
+the spiral ganglion cells in the inner ear
+are adaptive because it is more energy efficient,
+rather than because the responses
+of adaptive neurons are more effective
+for perceiving speech.
+
+\subsection{Syllabification limits}
+
+In Section~\ref{sec:prod-results},
+we showed that producing
+sequences of syllables
+tends to break down
+when the sequence length is four or above.
+While it is possible to increase the
+dimensionality of the
+semantic pointer representations
+to improve the accuracy
+of longer syllable sequences,
+we nevertheless predict that
+there is a limit to the speed
+of the linguistic system's
+prosodification process.
+Recall that the prosodification process
+organizes strings of phonemes
+into discrete syllables,
+which become syllable targets for
+the sequencing system.
+If speech production is suppressed,
+the prosodification process
+could plan the syllabification
+of an entire utterance.
+Our model predicts that
+the linguistic system
+cannot plan that far ahead;
+it can construct a sequence of four
+(or possibly up to five or six)
+syllable targets ahead of time,
+but in general,
+the syllabification of an utterance
+must be generated on the fly.
+
+\subsection{Mapping to brain areas}
+
+In Chapter~\ref{chapt:bg}
+we reviewed the brain areas
+involved in speech recognition and production,
+in part to place connectivity constraints
+on the model as a whole.
+However, in order to generate testable predictions,
+we can also impose a mapping from
+the neural structures in the model
+to speech-related brain regions.
+
+The NCC model is primarily a model
+of the auditory periphery,
+which is cochleotopically organized.
+The ensembles representing
+cepstral coefficients and derivatives
+aggregate information across
+all frequencies,
+so we predict that cepstral coefficients
+(or, in general, decorrelated acoustic information)
+would be represented
+in higher auditory areas in the
+superior and middle temporal gyri.
+More specifically,
+we predict that activity in the
+first layer of non-tonotopically organized
+auditory cortex would
+closely resemble the activity of
+the neurons in the cepstral coefficient
+ensembles in the NCC model.
+The fact that the
+human auditory system integrates information
+from many more frequencies than
+are integrated in the model
+indicates that additional
+hierarchical processing layers may be beneficial
+before combining all this information together,
+as is done in human auditory cortex.
+The NCC model should also
+include these hierarchical process layers
+when scaling up.
+
+The sequencing and production model
+can be related to
+ventral sensorimotor cortex (vSMC) literature,
+as reviewed in Section~\ref{sec:prod-neurobio}.
+Specifically, we predict that
+the vSMC can be mapped to the
+production information network in our model.
+As such, vSMC activity should be very similar
+to the activity of production information network
+ensembles in the production model.
+Briefly, because the production information network
+assigns a separate ensemble to each
+vocal tract gesture, we predict that
+vocal tract gestures could be decoded
+from recordings of vSMC activity.
+If this turns out to not be case,
+then it would either indicate that
+the sequencing and production model
+should produce vocal tract articulator position targets
+rather than vocal tract gestures,
+or it may indicate that the representation
+of vocal tract gestures
+in the production information network
+is more distributed than is currently in the model.
+The model can be modified to use
+fewer multidimensional ensembles
+in the production information network to test
+these more specific predictions.
+
+Finally, we believe that
+the syllable recognition model
+can be mapped to area Spt,
+which we reviewed
+in Section~\ref{sec:sm-neurobio}.
+We therefore predict that
+activity in Spt would
+be closely related to the activity
+in the syllable recognition model.
+Since the syllable recognition model
+is likely to be used in situations
+where a lexical decoding must be
+disambiguated,
+we propose an experiment to test
+the prediction that area Spt
+performs syllable recognition.
+In the experiment,
+subjects would watch videos
+of people voicing sentences
+with words that can be manipulated
+with the McGurk effect;
+i.e., one word would be perceived
+differently depending on the
+video clip associated with the audio.
+We predict that transient
+deactivation of area Spt would
+abolish the McGurk effect,
+making the sentences sound the same
+regardless of the video clip viewed.
+Unfortunately, this kind of manipulation
+is difficult to perform in humans;
+transcranial magnetic stimulation (TMS)
+may be an option if a subject's
+area Spt is not too deep in the
+Sylvian fissure.
+
+Many more mappings can be made
+in future iterations of these models,
+and with a more thorough investigation
+of neurobiological literature.
+
+\section{Limitations}
+
+The primary limitation of these models
+is that they are still in early stages,
+and do not scale to the challenges
+of natural speech,
+either in terms of the speed
+of speech (as in the recognition model)
+or in the number of syllables
+in the mental syllabary
+(as in the production and recognition models).
+However, as we showed in
+Sections~\ref{sec:res-ncc-scaling},
+\ref{sec:res-prod-scaling},
+and~\ref{sec:res-recog-scaling},
+all of the models presented in this thesis
+scale well in terms of neural resources,
+meaning that adding additional neural structures
+to increase scaling performance
+will not result in biologically implausible
+neural models.
+
+In terms of the algorithms used
+by these models,
+our treatment of DMPs is currently incomplete,
+as we do not consider
+the DMP point attractor.
+As mentioned previously,
+incorporating the point attractor
+in the production model
+should be possible with tighter integration
+between the model
+and the articulatory synthesizer.
+However, in the recognition model,
+the novel iDMP algorithm
+requires further development
+to estimate both the state of the
+canonical system,
+and the state of the system
+with respect to the point attractor.
+
+Finally, the conceptual Sermo model
+only describes the computations necessary
+for recognizing and synthesizing syllables.
+However, speech involves much more
+than perceiving and producing syllables;
+even the perception and production of syllables
+is affected by prosody,
+which is not currently reflected in Sermo.
+Sermo is only a first step toward
+an integrated closed-loop model
+of speech.
+
+\section{Future work}
+
+While we have already mentioned many
+aspects of Sermo and the three models
+implemented in this thesis
+that can be improved in future work,
+there are nevertheless many more
+avenues of interesting future research
+that I wish to highlight.
+
+\subsection{Model extensions}
+
+Part of the motivation for the NCC model
+is that there are existing hardware devices
+called silicon cochleas
+which aim to replicate the function
+of the biological cochlea
+such that they can be implanted
+in the brain to partially recover the sense of hearing.
+As we have shown that the NCC model
+can be used to classify phones
+in pre-segmented speech,
+it would be useful to
+implement the NCC model using
+a silicon cochlea
+as the auditory periphery model
+and run the same experiment
+to determine if phones can be classified
+in pre-segmented speech.
+If so, then the NCC model could serve
+as a way of comparing different
+silicon cochlea implementations
+without having to implant them
+in human subjects.
+Additionally, the NCC model
+would be a useful tool in silicon cochlea design,
+as long as there is agreement
+between the results of the NCC model
+and the perceptual evaluations
+of human subjects
+with cochlear implants.
+
+Currently, the syllable sequencing and production model
+can instantiate syllable DMPs with different
+intrinsic frequencies.
+However, syllable speed can also vary within syllables.
+The DMP framework makes this possible through
+dissociating the canonical system state
+from the forcing function itself.
+In order for the production model to take advantage
+of this dissociation,
+we would need to make the DMP system state oscillator
+a controlled oscillator.
+Fortunately, controlled oscillators
+have already been implemented successfully
+with the NEF and Nengo \citep{bekolay2013},
+so this modification should be straightforward.
+
+In the syllable recognition model,
+the classifier ensemble uses adaptive LIF neurons
+in order to provide a slightly longer
+burst of activity when a syllable is classified,
+ensuring that the states
+of the iDMPs are cleared
+when a classification occurs.
+However, as can be seen in Figure~\ref{fig:recog-bad},
+states are not always reset completely,
+resulting in erroneous syllable classifications.
+One way to mitigate this issue
+would be to use a neuron model
+that intrinsically bursts,
+rather than the adaptive LIF neuron
+which fires only slightly more
+action potentials than normal.
+Incorporating a bursting model
+into Nengo would be useful for other models as well;
+I anticipate that precisely timed models,
+including the production model,
+could benefit from bursting neurons
+in situations where neural inhibition
+plays an important role.
+
+Finally, we currently use
+production information trajectories
+computed offline as the input to
+the syllable recognition model.
+Using actual trajectories,
+either from databases like
+MNGU0 \citep{steiner2012},
+or from a model that decodes
+production information from
+auditory features,
+would be a better test
+of the syllable recognition model.
+
+\subsection{Syllable consolidation}
+\label{sec:syllable-learning}
+
+Currently, we have implemented models
+of sensorimotor integration,
+including a mental syllabary,
+as the endpoint of a learning process.
+However, with the recent development
+of synaptic plasticity rules
+for the NEF
+\citep{macneil2011,bekolay2013a},
+it is possible to also model
+sensorimotor development,
+which is important because
+the role of sensorimotor integration
+is most prominent during speech development,
+not in adult speech.
+
+A full picture of speech development involves
+learning vocal tract gestures
+through reinforced motor babbling,
+learning basic syllables
+through mimicry,
+and building a repository of
+learned syllable representations
+(i.e., a mental syllabary).
+While I believe that Sermo can be
+a useful starting point for a
+model of all developmental stages,
+adding elements to the mental syllabary
+would be possible with few modifications.
+We call this learning process
+``syllable consolidation,''
+and provide a sketch for designing
+such a model in the remainder of this section.
+
+Syllable consolidation involves
+learning a novel vocal tract gesture trajectory
+to voice a syllable that
+is initially infrequently encountered,
+but through repeated presentations,
+becomes frequent
+(i.e., is consolidated in the mental syllabary).
+We propose that it would be learned
+in three steps.
+
+\begin{enumerate}
+\item Initialize a new syllable from the most
+  similar existing syllable.
+  For example, when learning to voice
+  the syllable \ipa{[bA]}, the system should
+  start from the syllable \ipa{[gA]} if it is known.
+\item Swap compatible speech gestures.
+  For example, vowel producing gestures
+  would be compatible, allowing for modifying
+  a \ipa{[bA]} to a \ipa{[bu]}, and so on.
+  The choice of which gesture to swap and
+  how to swap it will be informed by
+  the syllable recognition system.
+\item Fine-tune the voiced syllable
+  until it can be recognized as the
+  syllable to be learned.
+\end{enumerate}
+
+This type of learning system
+could be called ``bootstrapped''
+because it assumes that a system
+with an existing repertoire of syllables
+already exists.
+These existing syllables would be
+used in learning the new syllable.
+Bootstrapped syllable learning contrasts with
+the type of syllable learning
+done as an infant and toddler,
+which uses reinforced speech babbling
+to learn novel syllables.
+
+Bootstrapped learning
+would be accomplished with the NEF and Nengo
+by setting up a new DMP with a system state oscillator.
+Initially, the forcing function decoded from the state
+would always return zero.
+The prescribed error sensitivity learning rule
+\citep{macneil2011,bekolay2011}
+would be applied to the
+connection decoding the forcing function.
+Initially, the error signal would be provided
+by the syllable DMP that is most similar
+to the syllable to be learned.
+Once that transfer learning has finished,
+the error signal would be provided by
+the production information decoding,
+which would swap the compatible gestures,
+and fine-tune the newly consolidated syllable.
+
+These steps require several systems
+that have already been implemented
+in the recognition and synthesis systems separately;
+for example, the ability to compare
+voiced syllables to those already known
+is one of the primary goals
+of the recognition system itself,
+so it can be leveraged when trying to learn new syllables.
+However, these steps also point to new systems
+that must be implemented.
+First, the system requires a method
+to transfer a forcing function
+from one DMP to another.
+Second, the production information decoding process
+that we have hypothesized is done
+in the sensorimotor integration system
+would be required for gesture swapping
+and fine-tuning.
+
+\subsection{Prosody}
+
+A final area for fruitful future work
+is the incorporation of prosodic effects
+in Sermo and models of Sermo parts.
+Prosody is an important part of speech,
+and is notably missing from
+current state-of-the-art approaches
+to speech recognition and synthesis.
+Adding prosodic effects to approaches
+to computational speech would go a long way
+toward making recognition and synthesis more natural.
+Unfortunately, most existing computational approaches
+make prosody difficult to add in
+\textit{post hoc}.
+However, I believe that because Sermo
+is designed with highly parallel parts
+(i.e., spiking neurons),
+and uses biologically inspired components
+(e.g., an articulatory synthesizer),
+prosody will be natural to include
+in future work.
+
+Prosody will involve additional theoretical concepts
+and Sermo subsystems.
+Theoretically, I believe that the linguistic concept
+of tone units will be central to incorporating
+prosody in Sermo.
+Briefly, tone units represent an additional
+level in the speech production hierarchy
+(see Figure~\ref{fig:production})
+that is higher than syllables.
+A tone unit is made up of a serially ordered
+sequence of syllables.
+
+The structure of a tone unit is similar
+to a syllable, except its component parts
+are syllables instead of phonemes,
+and its components are serially ordered.
+A tone unit must contain a tonic syllable
+(sometimes also called the nucleus),
+and can optionally contain one or more syllables
+in a pre-head, head, or tail section.
+The pre-head consists of all syllables
+before the first stressed syllable
+in a tone unit.
+The head consists of all syllables from
+the first stressed syllable
+to the tonic syllable.
+The tonic syllable is the most significant
+syllable in the tone unit because
+pitch changes in the tonic syllable
+will occur relative to the tonic syllable;
+the tonic syllable is not necessarily
+the loudest or most prominently stressed
+syllable in the tone unit,
+though it does always contain
+a stressed (and therefore heavy) syllable.
+The tail consists of all syllables
+following the tonic syllable.
+
+Tone units are defined by
+a pitch trajectory that aligns with
+the component parts of the tone unit.
+There are a limited set of possible
+pitch trajectories in English,
+including falling, rising,
+fall-rise, and rise-fall trajectories.
+The same sequence of syllables
+can change its meaning dramatically
+by using a different pitch trajectory,
+or by changing the position of the
+tonic syllable within that pitch trajectory.
+The meaning of each pitch trajectory
+changes depending on the utterance in question.
+
+Adding prosody to Sermo
+would require the perception and production
+of pitch trajectories,
+which would be aligned to syllables
+in the roles described above.
+Perceiving pitch trajectories would also require
+a system for determining the baseline pitch
+of a particular speaker.
+I believe that all of these systems
+could be designed and implemented
+with the NEF.

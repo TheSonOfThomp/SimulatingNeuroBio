@@ -1,0 +1,202 @@
+\chapter{Introduction}
+
+Speech is arguably the most important
+medium through which humans communicate.
+As the role of human-computer interaction
+in modern society increases,
+so does the need for computers
+to recognize and synthesize speech.
+Currently, state-of-the-art approaches
+to computational
+speech recognition and synthesis
+are based on statistical analyses
+of extremely large data sets.
+While our understanding
+of the neurobiology of speech has advanced
+in recent years,
+there currently exist no
+models perceiving or producing speech
+using neurobiological parts,
+in particular spiking neurons.
+Spiking neurons are the basic building blocks
+of the brain.
+Each neuron takes input from many other neurons,
+and with enough input,
+experiences a spike in membrane voltage,
+which results in neurotransmitter
+delivery to downstream neurons.
+The activities of many billions
+of spiking neurons with trillions
+of interconnections are responsible
+for producing and processing
+complex behaviors including speech.
+
+Recent advances in large-scale neural modeling
+enable spiking neuron models of speech.
+The Neural Engineering Framework (NEF; \cite{eliasmith2004})
+provides a framework to implement
+dynamical systems with networks of spiking neurons.
+The Semantic Pointer Architecture (SPA; \cite{eliasmith2013})
+provides a method to connect these dynamical systems
+to symbol-like representations.
+In terms of speech,
+dynamical systems enable processing of
+temporally varying sensory inputs
+to effect motor outputs.
+The symbol-like representations in SPA
+allow us to interpret the states
+of these dynamical systems
+as linguistically relevant concepts,
+which connects the low-level
+sensorimotor aspects of speech
+with the high-level linguistic aspects of speech.
+Taken together, the NEF and SPA
+provide the essential tools required
+to apply biological methods
+to the fields of
+speech recognition and synthesis,
+which are currently dominated
+by computational statistics.
+
+In addition to the application of biological methods,
+we aim to provide a framework for
+closed-loop speech systems
+which perform both recognition and synthesis
+with common representations.
+Currently, state-of-the-art approaches
+to speech recognition and synthesis
+are independent;
+that is, speech recognition and synthesis
+are seen as independent problems,
+and are solved by independent systems.
+In humans, however,
+speech perception and production
+overlaps and interacts in a closed-loop manner.
+When learning to speak,
+we use the perception of our own voice
+to improve future vocalizations.
+While the role of such a closed-loop system
+diminishes over time,
+we still regularly monitor
+our own speech and can adapt
+when our speech perception or production
+are perturbed through illness
+or other means.\footnote{
+  Here, and for the remainder of this thesis,
+  we will refer to the sensory aspect
+  of speech as ``speech perception''
+  when referring to human speech understanding,
+  and as ``speech recognition''
+  when referring to computer speech understanding.
+  Similarly, the motor aspect of speech
+  will be referred to as
+  ``speech production''
+  when referring to humans speaking,
+  and as ``speech synthesis''
+  when referring to computers producing speech.}
+
+The long-term goal of the line of research
+described in this thesis
+is a closed-loop speech system
+that uses biological methods
+implemented in computers
+to recognize and synthesize speech.
+Such a system could produce its own training data,
+and therefore would require
+far less hand-labeled real-world data than
+current purely statistical systems.
+It would also enable interrogation
+of how the system recognizes
+and synthesizes speech,
+and enable synergistic interactions
+between theoretical model developers
+and experimental researchers
+in linguistics and neuroscience.
+As the model develops and makes predictions
+about the computations required for speech
+and how they might be implemented,
+linguists and neuroscientists
+can test those predictions
+and update the model accordingly.
+
+In order to achieve the long-term goal
+of a closed-loop system
+implemented with biologically realistic neurons
+that can learn from itself,
+we must first
+envision what a large-scale closed-loop system
+would look like,
+and detail the computations required by that system.
+We must also verify that neural implementations
+of these computations
+are possible with the available tools.
+In this thesis, I address these two concerns
+by proposing a closed-loop speech system
+called Sermo
+(\underline{S}peech \underline{e}xecution and
+\underline{r}ecognition \underline{m}odel \underline{o}rganism),
+and constructing simulated neural implementations
+of three subsystems of Sermo.
+In the conceptual Sermo model,
+I have synthesized literature
+in linguistics, psychoacoustics, neuroscience,
+automatic speech recognition,
+and articulatory synthesis
+to present a closed-loop system
+with well-defined computations.
+In the three subsystems I have implemented,
+I show that the NEF and SPA
+can be successfully applied to
+the computations required by the Sermo model,
+providing the first steps
+toward a neurally implemented closed-loop speech system.
+
+The remainder of the thesis is organized as follows.
+In Chapter~\ref{chapt:bg},
+I review the relevant background informing
+the conceptual Sermo model.
+In Chapter~\ref{chapt:model},
+I present Sermo,
+which provides context for
+the three neural models presented
+in the subsequent chapters.
+In Chapter~\ref{chapt:previouswork},
+I review existing approaches
+to solving the problems
+proposed by Sermo
+and addressed by the three neural models.
+In Chapter~\ref{chapt:methods},
+I provide details on the
+mathematical techniques
+used by the neural models,
+and used to construct the neural models.
+In Chapter~\ref{chapt:implementation},
+I describe the three neural models.
+In Chapter~\ref{chapt:results},
+I propose metrics through which
+to evaluate those models,
+and present the results of collecting those metrics
+while varying parameters of the neural models.
+In Chapter~\ref{chapt:discussion}
+I discuss the results,
+summarize the contributions and predictions
+of the models,
+and discuss avenues for future work.
+Finally, I conclude in Chapter~\ref{chapt:conclusion}.
+
+Note that this chapter organization differs
+from a prototypical thesis
+because I make both
+conceptual contributions
+in the Sermo model
+and modeling contributions
+in the three subparts of Sermo
+for which I have made neural models.
+As such, the background chapter is designed
+to provide background for the conceptual model,
+which in turn provides context
+for the neural models.
+The previous work chapter provides
+background for the neural models,
+which are then explained fully
+in the methods and implementation chapters.

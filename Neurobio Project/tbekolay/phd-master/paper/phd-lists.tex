@@ -1,0 +1,37 @@
+\renewcommand\contentsname{Table of Contents}
+\tableofcontents
+\cleardoublepage
+\phantomsection
+
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoftables
+\cleardoublepage
+\phantomsection
+
+\addcontentsline{toc}{chapter}{List of Figures}
+\listoffigures
+\cleardoublepage
+\phantomsection
+
+\chapter*{Typographical Conventions}
+\addcontentsline{toc}{chapter}{Typographical Conventions}
+\label{typography}
+
+This thesis uses the International Phonetic Alphabet (IPA)
+to denote utterance pronunciations.
+As is common practice in linguistics,
+we will use square brackets (e.g., \ipa{[$\cdot$]})
+to denote phonetic transcriptions
+(i.e., the actual phones uttered)
+and slashes (e.g., \ipa{/$\cdot$/})
+to denote phonemic transcriptions
+(i.e., the phonemes of interest).
+As little attention is paid to prosodic elements like stress,
+phone and phoneme strings will be presented
+without stress markers.
+
+\cleardoublepage
+\phantomsection
+
+% Change page numbering back to Arabic numerals
+\pagenumbering{arabic}

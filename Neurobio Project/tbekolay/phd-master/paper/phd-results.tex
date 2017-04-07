@@ -1,0 +1,2370 @@
+\chapter{Evaluation and results}
+\label{chapt:results}
+
+Here,
+I present evaluation metrics for the three models
+described in Chapter~\ref{chapt:implementation},
+gather those metrics
+for several experimental conditions,
+and present the results.
+
+\section{Neural cepstral coefficients}
+
+We hypothesize that
+neural cepstral coefficients (NCCs)
+are a suitable feature vector representation
+for traditional ASR systems,
+and biologically grounded systems like Sermo.
+In order to evaluate
+their suitability for speech recognition tasks,
+we compare NCCs to the most common
+feature vector used currently,
+Mel-frequency cepstral coefficients.
+
+\subsection{Evaluation}
+
+While different ASR systems
+use the feature vector in different ways,
+the most important quality of the feature vector
+is that audio samples corresponding
+to a particular label
+(e.g., a phone or word)
+take a similar trajectory
+in the feature vector space
+as other samples corresponding to the same label.
+All samples corresponding to other labels
+should take trajectories that are
+far enough away in the vector space
+to provide a basis for labeling
+a test sample correctly.
+As such, we compare MFCCs and NCCs
+on a purely statistical level,
+rather than using them as a frontend
+in an ASR system,
+which would bias the results
+toward the aspects of the
+feature vector trajectories
+that the ASR system's backend
+is most suitable for detecting.
+
+We therefore compare MFCCs and NCCs
+using a linear support vector machine (SVM)
+that is trained on labeled
+examples of feature vector trajectories
+corresponding to phones
+in the TIMIT training corpus,
+and tested on trajectories
+corresponding to phones
+in the TIMIT testing corpus.
+
+TIMIT \citep{garofolo1993} is a corpus of read speech
+with time-aligned phone and word transcriptions.
+The corpus contains ten speech samples
+from 630 speakers across eight dialects
+of American English,
+totaling 6300 utterances
+(5.4 hours of continuous speech).
+The utterances are separated into
+a training set
+(4620 sentences) and a testing set (1680 sentences),
+allowing for standardized
+comparisons of ASR systems.
+TIMIT was released in 1990,
+and is still a standard data set used
+for testing ASR systems
+due to the high quality
+manual phone transcriptions,
+diversity of speakers,
+and convenient size,
+as it is small enough to be
+computationally tractable
+but large enough to
+provide a meaningful comparison
+between ASR approaches.
+
+We will focus on classifying
+phones in the TIMIT data set.
+Phones are voiced
+for a shorter time than words,
+and have high variability
+as phone sounds can be affected
+by the previous and next phones voiced,
+making phone classification
+a more difficult statistical task
+than word classification.
+Since we are not solving the full
+speech recognition problem,
+and are instead classifying
+pre-segmented speech samples,
+we anticipate that word classification
+would be too simple to meaningfully
+compare MFCCs and NCCs.
+
+Additionally, classifying phones
+is advantageous because similar phones
+are voiced for a similar length of time,
+unlike words.
+Another way in which our statistical comparison
+differs from the full speech recognition problem
+is that we must stretch
+feature vector trajectories
+such that all trajectories are the same length,
+due to the constraints of SVM classifiers;
+therefore,
+we aim to minimize the amount
+of stretching done.
+
+We stretch feature vector trajectories
+to be as long as the longest trajectory
+in the training and testing samples
+using simple linear interpolation.
+An alternative method
+for stretching the trajectory
+would be to use dynamic time warping
+\citep{ratanamahatana2004}.
+However, dynamic time warping
+involves aligning each speech sample
+to a representative example,
+which would necessitate manually
+determining a suitable example
+for each phone for each experiment.
+Additionally, the manual effort may not
+provide any concrete benefits;
+\citeauthor{ratanamahatana2004}
+showed that linearly interpolating
+time series data
+produced classification accuracy rates
+statistically indistinguishable
+from accuracy rates on time series data
+aligned using dynamic time warping.
+
+TIMIT defines a set of 61 phones,
+which includes vowels, consonants,
+consonantal closures, pauses and silences.
+\citet{lee1989} identified allophones and
+other situations where two phones
+are used interchangeably,
+collapsing the full set of phones
+to a set of 39 phones,
+which are typically used
+instead of the full set.
+Many studies improve error rates
+by further categorizing
+the phones with similar properties;
+e.g., grouping together all
+plosives, fricatives, and so on
+\citep{lopes2011}.
+We will use the reduced set of 39 phones.\footnote{
+  The set of 39 phones includes a ``silence'' phone,
+  which we include when using all phones,
+  but do not include in either
+  the vowel or consonant phone set
+  when testing with only vowels or consonants.}
+Because vowels are typically voiced
+longer than consonants,
+we will investigate whether
+separating them is advantageous
+since we lengthen all samples
+to the longest sample.
+
+Support vector machines are a standard
+supervised learning technique
+often applied to classification tasks,
+and are particularly well suited
+to high-dimensional data.
+The SVM algorithm learns a hyperplane
+that separates data
+in one class from other classes,
+which it can subsequently use
+to classify data
+by evaluating where the data point
+lies in vector space compared to the hyperplane.
+When dealing with more than two classes,
+hyperplanes can be learned to separate
+each combination of two classes
+(``one-against-one'' classification)
+or each class from all other classes
+(``one-vs-the-rest'' classification).
+When data is relatively low dimensional,
+the kernel trick can be applied,
+which projects the input data
+into a higher dimensional space
+based on a kernel function.
+
+In the case of speech feature vector trajectories,
+we have relatively many samples,
+classes and features,
+so we use a one-vs-the-rest
+support vector machine classifier
+that does not use the kernel trick
+(i.e., a linear SVM).
+We use LibLinear's fast implementation
+of linear SVMs \citep{fan2008},
+exposed to Python through
+the scikit-learn package
+\citep{pedregosa2011}.
+
+The metric that we collect
+in the experiments below
+is classification correctness,
+either in absolute terms,
+or NCC classification correctness
+relative to the baseline correctness
+obtained with MFCCs.
+In the ASR literature,
+phone error rates are often
+reported on TIMIT.
+The phone error rate
+takes into account
+incorrect classifications
+(substitutions),
+a lack of classification
+when there should be one
+(deletions)
+and erroneous classifications
+where there should not be one
+(insertions).
+However, since we pre-segment
+speech into short samples
+corresponding to some phone,
+we cannot have deletions or insertions,
+only substitutions,
+which corresponds to classification correctness.
+Since we use correctness
+rather than accuracy,
+we can only compare our approach
+to some reported results
+\citep{lopes2011},
+but even then the comparison is flawed.
+Hence, we generate both MFCCs
+and NCCs for the same speech samples
+in order to verify that
+NCCs generate feature vector trajectories
+that are at least as statistically separable
+as the equivalent MFCC trajectories.
+
+\subsection{Experiments and results}
+\label{sec:results-ncc}
+
+In each experiment,
+we isolate the TIMIT speech samples
+corresponding to the phones
+of interest,
+and generate a feature vector trajectory
+(i.e., MFCC or NCC)
+for that sample.
+MFCCs are generated using frames
+of 25 ms,
+which advance 10 ms on each timestep,
+as is standard in many ASR systems.
+NCCs are generated
+by running the model described in
+Section~\ref{sec:ncc-neural} with a 1 ms simulation timestep.
+Because NCC generation takes several minutes,
+and because the SVM fitting procedure
+is quadratic in the number of samples,
+we limit our experiments to
+one of the eight geographical region-specific subsets
+of the TIMIT dataset
+(the ``army brat'' region,
+which consists of a training set
+of 220 utterances across 22 speakers,
+and a test set of 110 utterances
+across 11 different speakers),
+but run each experiment
+10 times with different random seeds
+to generate confidence intervals
+for each experimental condition.
+In the MFCC case,
+the feature vectors are the same
+on every trial;
+the random seed controls the
+stochastic nature of
+the supervised learning procedure
+used by the SVM.
+In the NCC case,
+the random seed affects both
+the generation of model parameters
+that are sampled from random distributions,
+and the random seed used by the SVM.
+
+All trajectories are
+made to be the same length,
+as is required by the SVM algorithm.
+The number of frames used
+for all samples is
+the number of frames in
+the longest MFCC trajectory
+in the training set.
+Samples that are too short
+(e.g., most MFCC trajectories)
+are lengthened to match the
+target number of frames
+using linear interpolations.
+Samples that are too long
+(e.g., all NCC trajectories)
+are shortened to match the
+target number of frames
+by splitting the trajectory
+into equally spaced time bins
+and taking the average
+for each bin.
+See Figure~\ref{fig:temp-scaling} for
+an illustration of temporal scaling,
+and example MFCC and NCC trajectories.
+
+\fig{temp-scaling}{1.0}{Example MFCC and NCC trajectories.}{
+  Example MFCC and NCC trajectories and temporally scaled versions.
+  (A) MFCCs generated from an utterance of the word
+  ``deadline'' from the TIMIT speech corpus
+  with 25~ms frames advanced 10~ms per frame.
+  Both the raw MFCC and z-scored MFCC are shown.
+  (B) MFCCs lengthened through linear interpolation
+  to match the same number of frames as the NCC network.
+  (C) NCCs generated from the same utterance
+  with 1~ms timestep. Both the raw NCC and z-scored NCC are shown.
+  (D) NCCs shortened through neighborhood averaging
+  to match the same number of frames as the MFCC model.}
+
+Each trajectory is then flattened
+to produce a vector of length
+$n_{\text{cepstra}} \times n_{\text{frames}}$.
+Each trajectory is associated with
+the phone label associated with
+the original speech sample,
+producing an input-output pair
+that is used to train the linear SVM.
+
+Finally, the same procedure is done
+with the test set to produce another
+set of input-output pairs.
+The input is fed to the linear SVM
+to generate phone label predictions,
+which are compared to the actual phones
+to yield a correctness measure.
+
+Wherever not specified,
+the parameters used for each model
+are as listed in Table~\ref{tab:ncc}.
+In most cases, we test for correctness
+only on the set of consonant phones
+for speed reasons
+(a more thorough justification is given
+later).
+
+\begin{table}[ht!]
+  \begin{footnotesize}
+    \begin{center}
+      \begin{tabular}{lcl}
+        \toprule
+        Parameter & Default value & Part of model affected \\
+        \midrule
+        \texttt{MFCC dt} & 10 ms & MFCC (frame advance) \\
+        \texttt{MFCC window\_dt} & 25 ms & MFCC (frame size) \\
+        \texttt{n\_fft} & 512 & MFCC \\
+        \texttt{deriv\_spread} & 2 & MFCC (derivative) \\
+        \texttt{n\_cepstra} & 13 & MFCC and NCC \\
+        \texttt{n\_filters} & 32 & MFCC and NCC \\
+        \texttt{minfreq} & 0 & MFCC and NCC \\
+        \texttt{maxfreq} & 8000 & MFCC and NCC \\
+        \texttt{n\_derivatives} & 1 & MFCC and NCC \\
+        \texttt{auditory\_filter} & Gammatone & Auditory periphery \\
+        \texttt{neurons\_per\_freq} & 8 & Auditory periphery \\
+        \texttt{adaptive\_neurons} & False & Auditory periphery \\
+        \texttt{cepstra n\_neurons} & 20 & NCC cepstral coefficients \\
+        \texttt{deriv\_type} & Feedforward & NCC derivative nets \\
+        \texttt{deriv\_n\_neurons} & 20 & NCC derivative nets \\
+        \texttt{deriv\_tau\_fast} & 0.005 & NCC FF derivative \\
+        \texttt{deriv\_tau\_slow} & 0.1 & NCC FF derivative \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+  \end{footnotesize}
+  \caption{Parameters used in the NCC model.}
+\label{tab:ncc}
+\end{table}
+
+\subsubsection{Derivatives and z-scoring}
+
+Two important choices for a feature vector
+are whether to include derivatives,
+and whether to normalize the resulting vector.
+Typically, ASR systems include at least
+one derivative, and perform normalization
+through z-scoring
+(i.e., removing the mean
+and normalizing to unit variance).
+We investigated whether these
+choices are important for NCCs.
+
+\fig{ncc-zscore}{1.0}{Varying z-score in NCC model.}{
+  Results for the NCC experiment in which we vary
+  whether the feature vector is z-scored or not.
+  (A) Violin plot of the training and testing accuracy.
+  A violin plot shows the kernel density estimation
+  for each column, which visualizes the entire distribution.
+  (B) Bar plot of the training and testing accuracy.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+Figure~\ref{fig:ncc-zscore} shows
+the training and testing correctness
+for ten trials
+with and without z-scoring.
+For MFCCs,
+z-scoring greatly reduces the variance
+of the training and testing correctness;
+the mean correctness values
+may be slightly lower
+for consonant phones,
+but the high variance is concerning.
+For NCCs,
+z-scoring significantly
+raises training correctness,
+but lowers testing correctness.
+Variance is approximately the same
+regardless of whether the vectors are z-scored.
+
+We interpret these results
+as meaning that z-scoring is essential
+for MFCCs because without it,
+the SVM fitting procedure
+varies significantly for
+different random seeds
+(hence the high variability without z-scoring).
+NCCs, on the other hand,
+have low variance in either condition.
+Since a higher test correctness indicates
+better generalization,
+we believe that z-scoring
+does more harm than good for NCCs.
+Therefore, for future simulations,
+we will z-score the MFCC feature vector,
+but not the NCC feature vector.
+
+\fig{ncc-derivatives-acc-b}{0.65}{
+  Varying number of derivatives in NCC model.}{
+  Results for the NCC experiment in which we varied
+  the number of derivatives used in both the MFCC and NCC vectors.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+Figure~\ref{fig:ncc-derivatives-acc-b} shows
+results varying the number of derivatives
+used while always z-scoring MFCCs,
+and never z-scoring NCCs.
+Note that using one derivative means
+that the feature vector has
+length 26,
+where the first 13 elements
+are cepstral coefficients,
+and the last 13 are derivatives
+of the cepstral coefficients;
+using two derivatives means that
+the feature vector has length 39,
+with the derivative of the
+derivative of the cepstral coefficients
+appended to the vector with 26 elements.
+
+For MFCCs, adding a single derivative
+improves testing correctness
+significantly
+(from 25\% to 36\% correct),
+but adding a second derivative
+has very little effect
+(36\% correct).
+For NCCs, adding derivatives
+improves training correctness,
+but slightly reduces testing correctness.
+Unlike with z-scoring,
+we believe it is important
+for the MFCC and NCC features to
+be the same length,
+so for subsequent experiments,
+both feature vectors
+will contain the first derivative
+(and therefore have length 26).
+
+\subsubsection{Number of neurons}
+
+Ideally,
+we would like to reduce the amount of time
+that the NCC generation process takes.
+Reducing the number of neurons
+used in the NCC model
+can speed it up,
+but at the cost of performance.
+In the next two experiments,
+we vary the number of neurons used
+in different layers of the model
+in order to see their impact
+on speed and performance.
+
+\fig{ncc-periphery-acc-t}{0.65}{
+  Varying number of periphery neurons in NCC model.}{
+  Results for the NCC experiment in which we varied
+  the number of neurons in the auditory periphery.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 10 trials.
+  Note that a logarithmic scale is used on the x-axis.}
+
+Figure~\ref{fig:ncc-periphery-acc-t} shows the results of
+varying the number of neurons
+in the auditory periphery layer.
+In this layer,
+each auditory filter projects
+to an ensemble of neurons
+of the size varied in this experiment.
+Since the representation here
+is a simple one
+(a positive scalar value),
+the number of neurons required
+should not be very large,
+so we vary between
+1 and 32 neurons with steps
+at each power of two.
+The number of neurons used
+in the feature layers
+is fixed at 20 neurons per feature.
+Instead of plotting the absolute correctness,
+in this and subsequent experiments,
+we plot the correctness of the NCC model
+relative to the mean correctness
+of the same number
+of MFCC model instances.
+
+As seen in Figure~\ref{fig:ncc-periphery-acc-t},
+training correctness
+does not change significantly
+whether we use
+1 or 32 neurons neurons per filter.
+Testing correctness,
+however, improves up to
+using 8 neurons per filter,
+but then plateaus,
+or may even decline
+(possibly due to overfitting).
+Therefore, in all
+subsequent experiments,
+we use 8 neurons to represent
+the output of each auditory filter.
+
+\fig{ncc-feature-acc-t}{0.65}{
+  Varying number of feature neurons in NCC model.}{
+  Results for the NCC experiment in which we varied
+  the number of neurons in the ensembles representing elements
+  of the feature vector (i.e., cepstral coefficients
+  and the first derivative of the cepstral coefficients).
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+Figure~\ref{fig:ncc-feature-acc-t} shows the results
+of varying the number of neurons
+in the feature layer,
+which includes ensembles
+representing the cepstral coefficients,
+the ensembles representing
+the derivatives of those coefficients,
+and any additional ensembles required
+to compute the derivative.
+The number of neurons for each filter
+in the periphery is fixed at 8,
+as per the previous experiment.
+
+A very different trend is evident
+when varying the number of neurons
+used in the feature layer.
+For very small number of neurons,
+training correctness is worse
+than MFCC training correctness.
+As the number of neurons increases,
+correctness improves up to
+using 8 neurons per ensemble,
+then steadily worsens.
+Testing correctness, however,
+is highly variable until
+we use 8 neurons per ensemble,
+at which point performance
+steadily increases up to
+the highest number of neurons tested,
+64 neurons per ensemble.
+
+\fig{ncc-feature-time}{0.65}{Time taken for NCC feature neurons experiment.}{
+  Time taken to run a trial for the NCC experiment
+  varying the number of feature neurons.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+The number of neurons in the feature layer
+has a big impact on the amount of time
+each experiment takes;
+see Figure~\ref{fig:ncc-feature-time}.
+The time taken for each trial
+is the same up to 12 neurons per ensemble,
+at which point
+the time taken sharply increases.
+Since the correctness using 12 neurons per ensemble
+is significantly higher than
+the mean correctness of the equivalent MFCC feature vector,
+we believe that using 12 neurons per ensemble
+is sufficiently accurate.
+
+\subsubsection{NCC averaging}
+
+Before the eventual goal of
+varying the auditory periphery model used,
+we address concerns about the validity
+of our comparison.
+
+One concern is that
+the NCC model runs at a lower timestep,
+giving it some numerical advantages
+over the MFCC model;
+similarly, the shortening and lengthening
+procedures may affect the results.
+To examine the validity of these concerns,
+we performed an experiment
+with a fixed number of frames
+per audio sample,
+and varied the amount that the frame window
+advanced on each timestep.
+When the frame window moves at the
+same rate as the Nengo simulation timestep,
+the two models are manipulated
+in the same way by the
+shortening algorithm,
+which averages over a time window.
+
+\fig{ncc-dt-acc-b}{0.65}{Varying the MFCC frame advance step.}{
+  Results for the NCC experiment in which we varied
+  the MFCC frame advance step.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+Figure~\ref{fig:ncc-dt-acc-b}
+shows the consonant correctness
+as a function of the
+frame window advance in seconds.
+While using a lower timestep results in
+significantly better training correctness,
+testing correctness is actually better
+with a longer timestep,
+suggesting that the increased temporal
+resolution may cause overfitting.
+It is possible that this overfitting
+also occurs with the NCC model,
+but running with a high simulation timestep
+would result in an abundance of
+synchronous spiking activity
+and lowered decoding accuracy.
+We therefore conclude that the
+differing timesteps and temporal scaling
+do not introduce overt biases
+in favor of the NCC model.
+
+\subsubsection{Phone groups}
+
+To this point we have
+evaluated all of the experiments using
+the consonant phones
+under the assumption that they are
+more difficult to classify than vowel phones.
+However, it may be the case that
+using all phones together
+is a more advantageous situation
+for MFCCs compared to NCCs.
+For that reason,
+we compared the correctness
+of MFCCs and NCCs when using
+vowel phones, consonant phones,
+and all phones together
+(including the silent phone).
+
+\fig{ncc-phones}{1.0}{Testing NCCs with different phone sets.}{
+  Results for the NCC experiment in which we varied
+  the set of phones used in both training and testing.
+  (A) Consonant correctness values for both MFCC and NCC models
+  are shown.
+  (B) The correctness of the NCC model relative to the mean
+  of the MFCC models is shown.
+  In all cases, error bars represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+Figure~\ref{fig:ncc-phones} presents the results.
+Focusing on absolute correctness,
+we observe that using MFCCs
+yields slightly worse correctness
+when using all phones compared
+to vowel or consonant phone sets.
+Using NCCs yielded the same
+or slightly worse correctness
+for consonants compared to all phones.
+Using only consonants, therefore,
+is more advantageous for MFCCs
+than for NCCs.
+Looking at the relative correctness values,
+it can be seen that for all phone sets,
+NCCs perform significantly better
+than MFCCs.
+
+\fig{ncc-phones-time}{0.65}{Time taken for NCC phone sets experiment.}{
+  Time taken to run a trial for the NCC experiment
+  varying the set of phones used.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 10 trials.}
+
+As seen in Figure~\ref{fig:ncc-phones-time},
+using all phones increases the
+amount of time to run experiments significantly.
+Not only do NCCs take a longer time to generate,
+the increased number of samples
+causes the SVM fitting procedure
+to take a long time
+for both MFCCs and NCCs.
+Interestingly, fitting for NCCs
+takes slightly above half
+the time as fitting for MFCCs
+(approximately 520 seconds
+compared to 1110 seconds for MFCCs),
+despite the number of samples
+and number of features being identical.
+This result indicates that it is
+easier to find linearly separating hyperplanes
+for NCCs than MFCCs.
+
+In sum, we believe that our choice to
+test with consonant phones
+is justified,
+and provides the most difficult
+situation for NCCs compared to MFCCs.
+
+\subsubsection{Auditory periphery model}
+\label{sec:results-periphmodel}
+
+The final experiment varies the auditory periphery model
+used at the beginning of the NCC pipeline.
+We looked at two choices in the auditory periphery
+and how those choices impact classification correctness.
+
+The first choice is the auditory filter model.
+We ran 20~trials with each of the five
+auditory filter models presented
+in Section~\ref{sec:periphery-models}
+(10 with adaptive neurons, 10 with normal LIF neurons).
+While most of the parameters are the same
+as those in Table~\ref{tab:ncc},
+the current implementation of the Tan Carney model
+can only be used for audio signals
+with a 50~kHz sampling rate;
+for this reason, all TIMIT samples
+in these experiments
+are upsampled from the recorded 16~kHz to 50~kHz,
+and all models (both the MFCC and NCC models)
+use the upsampled audio.
+Additionally, the Tan Carney model
+has numerical instabilities for auditory filters
+with low characteristic frequencies,
+so all models use frequencies
+evenly distributed over the Mel scale
+from 200~Hz to 8000~Hz.
+
+\fig{ncc-periphmodel-racc-b}{0.65}{
+  Comparing NCCs produced with five auditory periphery models.}{
+  Results for the NCC experiment in which we varied
+  the auditory periphery model, relative to the mean MFCC correctness.
+  Compressive GC refers to the dynamic compressive Gammachirp filter.
+  In all cases, error bars represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+The results are plotted
+in Figure~\ref{fig:ncc-periphmodel-racc-b}.
+The Gammatone and Tan Carney models
+have the highest correctness values,
+with around 35\% better relative testing correctness
+than the MFCC model.
+The compressive Gammachirp model
+also performed well,
+though statistically worse
+than the Gammatone and Tan Carney models.
+The Log Gammachirp and Dual Resonance models
+both perform significantly worse
+than the other three,
+achieving only around 20--24\%
+more correctness than the MFCC model.
+
+\fig{ncc-periphmodel-time}{0.65}{
+  Time taken for NCC periphery model sets experiment.}{
+  Time taken to run a trial for the NCC experiment
+  varying the auditory periphery model.
+  Compressive GC refers to the dynamic compressive Gammachirp filter.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+As can be seen in Figure~\ref{fig:ncc-periphmodel-time},
+the compressive Gammachirp
+and Tan Carney models are
+more computationally expensive
+(3--4 times slower)
+than the other three models.
+As the least expensive model,
+the Gammatone filter
+provides by far the best tradeoff
+between classification correctness
+and computational cost.
+
+\fig{ncc-adaptive-racc-b}{0.65}{Varying neuron type in NCC model.}{
+  Results for the NCC experiment in which we vary
+  the neuron type.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 50 trials (10 per periphery model).}
+
+We also varied whether we used
+normal LIF neuron or adaptive LIF neurons,
+as spiral ganglion cells
+have facilitating and depressing behavior
+that is partly captured in the adaptive LIF neuron.
+As shown in Figure~\ref{fig:ncc-adaptive-racc-b},
+using adaptive LIF neurons had no impact
+on classification correctness.
+This result holds true even when
+evaluated for each auditory periphery model
+individually (not pictured).
+
+\subsection{Scaling}
+\label{sec:res-ncc-scaling}
+
+The model used in these experiments
+represents a small portion
+of the human auditory system.
+The number of auditory filters
+and cepstral coefficients
+are matched to the parameters
+commonly used in ASR systems.
+However, since our model is
+implemented with biologically realistic parts,
+it is important to determine
+if a scaled up version of the model
+matches known neuroanatomical constraints.
+
+The number of spiking neurons used
+in the model is
+\begin{equation*}
+  N = N_f |f| + N_c |c| + \sum_{i=1}^{|d|} 2 N_d |c|,
+\end{equation*}
+where $N_f$ is the number of neurons per frequency,
+$|f|$ is the number of frequencies modeled,
+$N_c$ is the number of neurons per cepstral coefficient,
+$|c|$ is the number of cepstral coefficients,
+$|d|$ is the number of derivatives,
+and $N_d$ is the number of neurons per derivative.
+
+With the parameters used
+in the majority of the experiments above,
+$N$=1036 neurons.
+According to the BioNumbers database,
+the human cochlea has 3500 inner hair cells
+\citep[BNID~100697]{milo2010}.
+Assuming that each inner hair cell
+represents a separate auditory filter
+(which is not necessarily true,
+but a worst case assumption),
+we conservatively estimate
+that a scaled up version
+of the NCC model
+would use 20 cepstral coefficients,
+1 derivative, and 50 neurons per feature,
+resulting in $N$=$7.3 \times 10^4$ neurons.
+If we are somewhat more generous
+and use 40 cepstral coefficients,
+2 derivatives, and 200 neurons per feature,
+we get $N$=$1.8 \times 10^5$ neurons.
+\citet{smiley2013} estimated
+that human A1 alone contains
+2$\times 10^7$--3$\times 10^7$ neurons,
+meaning that the NCC model
+fits well within human neuroanatomical constraints.
+
+\section{Syllable sequencing and production}
+\label{sec:results-production}
+
+The goal of the syllable sequencing and production model
+is to generate a continuous trajectory
+of production information
+that can be used to control
+an articulatory synthesizer,
+given a static representation
+of a sequence of syllables.
+As the quality of generated speech
+is difficult to quantify,
+we evaluate this model
+by generating a gesture score
+for the decoded production information trajectory,
+and comparing it
+to the gesture score that was provided
+to the model as input.
+
+\subsection{Evaluation}
+
+While the syllable sequencing and production model
+can be used to control any articulatory synthesizer,
+we use the VocalTractLab synthesizer
+because of its high quality speech
+and available API \citep{birkholz2013}.
+The vocal tract gesture representation
+in VocalTractLab is based on a set of
+predefined vocal tract shapes.
+Most gestures correspond to
+a particular shape,
+and the overall vocal tract shape
+is determined by linearly interpolating
+the shapes of all currently active gestures.
+Taking into account all of the
+possible shapes and glottal parameters,
+there are 48 possible vocal tract gestures
+(see Table~\ref{tab:vtl-vtg}) despite having only
+7 articulator sets
+controlling 22 articulators.\footnote{
+  There is also an f0 gesture and articulator set
+  which is not included here,
+  as it controls the pitch of the utterance.
+  Since German is not a tonal language,
+  the pitch is not required to voice a syllable,
+  and instead is used for generating
+  varied prosody;
+  we do not consider prosody in this model,
+  though including it is important future work.}
+
+\begin{table}[ht!]
+  \renewcommand{\arraystretch}{0.9}
+  \begin{scriptsize}
+    \begin{center}
+      \begin{tabular}{lll}
+        \toprule
+        Gesture & Value & Gesture type \\
+        \midrule
+        \texttt{a} & Binary & Vowel \\
+        \texttt{e} & Binary & Vowel \\
+        \texttt{i} & Binary & Vowel \\
+        \texttt{o} & Binary & Vowel \\
+        \texttt{u} & Binary & Vowel \\
+        \texttt{E:} & Binary & Vowel \\
+        \texttt{2} & Binary & Vowel \\
+        \texttt{y} & Binary & Vowel \\
+        \texttt{A} & Binary & Vowel \\
+        \texttt{I} & Binary & Vowel \\
+        \texttt{E} & Binary & Vowel \\
+        \texttt{O} & Binary & Vowel \\
+        \texttt{U} & Binary & Vowel \\
+        \texttt{9} & Binary & Vowel \\
+        \texttt{Y} & Binary & Vowel \\
+        \texttt{@} & Binary & Vowel \\
+        \texttt{@6} & Binary & Vowel \\
+        \texttt{aI-begin} & Binary & Vowel \\
+        \texttt{aI-end} & Binary & Vowel \\
+        \texttt{OY-begin} & Binary & Vowel \\
+        \texttt{OY-end} & Binary & Vowel \\
+        \texttt{aU-begin} & Binary & Vowel \\
+        \texttt{aU-end} & Binary & Vowel \\
+        \texttt{a-raw} & Binary & Vowel \\
+        \texttt{i-raw} & Binary & Vowel \\
+        \texttt{u-raw} & Binary & Vowel \\
+        \texttt{ll-labial-nas} & Binary & Lip \\
+        \texttt{ll-labial-stop} & Binary & Lip \\
+        \texttt{ll-labial-fric} & Binary & Lip \\
+        \texttt{tt-alveolar-nas} & Binary & Tongue tip \\
+        \texttt{tt-alveolar-stop} & Binary & Tongue tip \\
+        \texttt{tt-alveolar-lat} & Binary & Tongue tip \\
+        \texttt{tt-alveolar-fric} & Binary & Tongue tip \\
+        \texttt{tt-postalveolar-fric} & Binary & Tongue tip \\
+        \texttt{tb-palatal-fric} & Binary & Tongue body \\
+        \texttt{tb-velar-stop} & Binary & Tongue body \\
+        \texttt{tb-velar-nas} & Binary & Tongue body \\
+        \texttt{tb-uvular-fric} & Binary & Tongue body \\
+        \texttt{breathy} & Binary & Glottal shape \\
+        \texttt{pressed} & Binary & Glottal shape \\
+        \texttt{open} & Binary & Glottal shape \\
+        \texttt{stop} & Binary & Glottal shape \\
+        \texttt{modal} & Binary & Glottal shape \\
+        \texttt{slightly-pressed} & Binary & Glottal shape \\
+        \texttt{slightly-breathy} & Binary & Glottal shape \\
+        \texttt{fully-open} & Binary & Glottal shape \\
+        \texttt{velic} & Scalar & Velic \\
+        \texttt{lung-pressure} & Scalar & Lung pressure \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+  \end{scriptsize}
+  \renewcommand{\arraystretch}{1.0}
+  \caption[VocalTractLab gestures.]{
+    Gestures defined by VocalTractLab.
+    All gestures belong to a particular type,
+    which determines the gesture sequence that they are a part of,
+    and therefore the set of articulators that are modified
+    by the gesture.}
+\label{tab:vtl-vtg}
+\end{table}
+
+As discussed in Section~\ref{sec:impl-prod-overview},
+the input to the model
+is a semantic pointer
+representing a sequence of syllables.
+Each syllable has an associated DMP
+which is generated using
+a gesture score corresponding to
+a German syllable;
+the gesture scores are provided by
+Bernd Kr\"{o}ger.\footnote{
+  The gesture scores are freely available at
+  \url{http://www.phonetik.phoniatrie.rwth-aachen.de/bkroeger/research.htm}.
+  These German syllable gesture scores are among
+  the few publicly available gesture scores;
+  I was not able to find any gesture scores
+  for English syllables.}
+Each gesture score in VocalTractLab
+is a collection of
+gestures that are parameterized by target value,
+onset time, gesture length,
+and a time constant that determines
+how quickly the gesture becomes active.
+
+For each experiment described below,
+we chose a random set of syllables
+as the frequent syllables
+that make up the syllables
+in the mental syllabary of the model.
+A sequence of syllables of a given length
+are randomly chosen and assigned a speed
+sampled from $\mathcal{U}(0.8, 3.0)$~Hz,
+which corresponds to syllable trajectories of
+333--1250~ms in length.
+Depending on the number of syllables
+and the randomly sampled lengths,
+in each trial we end up with a syllable sequence
+generating several seconds
+of production information trajectories,
+which in the case of these experiments,
+are 48-dimensional trajectories
+where each dimension is a gesture.
+
+The model is provided the static syllable sequence input,
+and is run for the amount of time that the sequence
+should take to voice (determined by the
+randomly assigned syllable speeds),
+plus a small amount of time to account
+for variability in each model instance.
+The output of the temporal output associative memory
+and the production information ensembles
+are recorded.
+
+That production information output is then converted
+into a gesture score
+by estimating the gesture parameters
+from the production information trajectories.
+Individual gestures are determined by
+taking the absolute value of the temporal derivative
+across each gesture;
+time slices which have high derivatives
+are indicative of the onset or offset of a gesture.
+We make a new gesture for each
+time slice with high derivative,
+using the midpoint between the
+start and end of the time slice
+as the beginning or ending time
+of the gesture.
+The last gesture ends at the end
+of the utterance.
+The time constant associated
+with the gesture
+is the length of
+the onset slice with high derivative.
+The value of scalar gestures is the
+average value between the two
+time slices with high derivatives.
+Every gesture has a neutral value
+representing that the gesture
+is not active;
+identified gestures with values
+sufficiently close to the neutral gestures
+are marked as neutral gestures.
+
+The gesture score resulting from the model simulation
+is then compared to the original gesture score
+on three criteria.
+First, we calculate the accuracy
+of the reconstructed gesture score
+with the same equation as phoneme classification accuracy;
+specifically,
+\begin{equation} \label{eq:accuracy}
+  \text{Acc} = \frac{N_g - S - D - I}{N_g},
+\end{equation}
+where $N_g$ is the number of gestures
+in the target gesture score,
+$S$ is the number of substitutions,
+$D$ is the number of deletions,
+and $I$ is the number of insertions.
+
+Therefore, we must find the number of
+substitutions, deletions, and insertions
+in our gesture score compared to
+a gesture score composed of
+the original gestures scores
+for the target syllables
+concatenated together.
+In order to determine the number of
+insertions, deletions and substitutions,
+we first convert the original
+and reconstructed gesture scores
+to a sequence of characters
+by assigning a character to each gesture
+and determining their order
+within each articulator set,
+then concatenating them.
+Neutral gestures are recorded
+and denoted with the ``\texttt{0}'' character;
+numerical gestures are binarized
+and given either ``\texttt{0}'' or ``\texttt{9}''
+depending on the numerical value
+relative to the gesture's range.
+We then do a global pairwise alignment\footnote{
+  Using the Needleman-Wunsch algorithm \citep{needleman1970},
+  implemented by the nwalign Python package
+  available at
+  \url{https://pypi.python.org/pypi/nwalign/}.}
+of the strings determined
+from the target gesture
+and the reconstructed gesture,
+which is then evaluated
+according to Equation~\eqref{eq:accuracy}.
+
+In order to evaluate
+the model's accuracy scores
+(since we know of no comparable
+speech trajectory generation techniques)
+we compare the accuracy
+of the reconstructed gesture scores
+to a baseline calculated as
+the mean accuracy of all the
+non-matching syllables in the
+repository of syllables.
+In other words, we calculate
+the accuracy of all combinations
+of syllables in the syllable repository
+(except for matching syllables)
+and set the baseline as the mean
+of those accuracy measures.
+The result of this calculation is 0.5164.
+This baseline is relatively high
+(chance accuracy is likely much lower than 0.5164);
+however, consider that many syllables
+have the same form (e.g., CV or CVC)
+and are only differentiated by
+one or two gestures.
+Additionally, all syllables
+have a similar profile for
+the lung pressure gesture.
+If the model can perform better
+than this baseline, however,
+we can be confident
+in saying that it is
+following a similar trajectory
+as the target gesture score.
+
+Since the accuracy measure only tells us
+that the gesture score contains
+the right gestures in the right order,
+we also aim to quantify
+how the temporal characteristics
+of the reconstructed gesture score
+differ from the target gesture score.
+For each correctly aligned gesture
+in the alignment computed
+for the accuracy measure,
+we record the difference
+between the gesture durations,
+and report both the mean and variance.
+The mean tells us about
+overall temporal difference,
+indicating that gesture durations
+differ in predictable ways;
+e.g., a high mean difference
+indicates that
+the reconstructed gesture score
+is slower than the target gesture score,
+but may still be able to
+produce intelligible speech.
+High variance, however,
+indicates that
+gesture durations vary in unpredictable ways,
+which is likely to be detrimental
+to intelligible speech.
+
+It is critically important
+for speech that certain gestures
+either begin or end at the same time;
+we will call these co-occurring gestures,
+though they may end or start at different times.
+Therefore, for each pair
+of co-occurring gestures in the
+target gesture score,
+we record the difference
+in the reconstructed gesture score's
+corresponding co-occurrence pair,
+if those gestures exist.
+We report the average absolute
+difference between the start or end times
+of reconstructed gestures
+that co-occur in the target gesture,
+and compare to a baseline
+computed by shuffling all of the gestures
+and determining if two random gestures
+start or end at the same time.
+
+Finally, we synthesize speech samples
+for each trial using VocalTractLab,
+and perform a qualitative evaluation
+of its intelligibility.
+Speech generated by the
+target gesture score is compared
+to that generated by the model.
+We do not obscure the label
+of the synthesized speech,
+as this measure is reported primarily
+to reinforce the other two measures;
+it is not the primary measure
+by which the model should be judged.
+
+\subsection{Experiments and results}
+\label{sec:prod-results}
+
+\subsubsection{Basic model operation}
+
+First, we examine the operation
+of a model instance in detail
+to ensure that the metrics we collect
+adequately characterize
+good and bad model trials.
+
+Figure~\ref{fig:prod-good} shows
+a successful model trial
+sequencing and producing the syllables
+\ipa{[blA ti dAs]};
+the \ipa{[ti]} syllable is voiced
+at around 2~Hz while the other
+two syllables are voiced around 1~Hz.
+The activities in various ensembles
+reflect the transformations
+and dynamics expected of the model,
+and result in a final
+production information trajectory
+that looks similar
+to the desired trajectory.
+Accuracy for this trial is 0.93
+(2 insertions occur at the end of the trajectory);
+the co-occurrence metric is 0.5
+(chance is 0.083).
+
+\fig{prod-good}{1.0}{
+  Successful example trial of sequencing and production model.}{
+  Successful example trial of the sequencing and production model.
+  See Figure~\ref{fig:prod-network} for the network structure
+  corresponding to the outputs plotted,
+  and text for more details.}
+
+\fig{prod-bad}{1.0}{
+  Unsuccessful example trial of sequencing and production model.}{
+  Unsuccessful example trial of the sequencing and production model.
+  See Figure~\ref{fig:prod-network} for the network structure
+  corresponding to the outputs plotted,
+  and text for more details.}
+
+Figure~\ref{fig:prod-bad}
+shows an unsuccessful model trial
+sequencing and producing
+\ipa{[blA ti dAs]}.
+In this instance,
+the sequencing mechanism did not properly
+switch to the next syllable,
+resulting in a repetition of the
+\ipa{[ti]} syllable.
+Accuracy for this model is 0.76
+(1 substitution, 2 deletions, and 4 insertions occur);
+the co-occurrence metric is 0.55
+(chance is 0.083).
+
+\subsubsection{Determining model parameters}
+
+For each trial in the subsequent experiments,
+we randomly select a set of syllables
+and a syllable sequence
+from a repository of 417 German syllables.
+Of these syllables,
+48 have CCV structure,
+184 have CV structure,
+162 have CVC structure,
+and 23 have V structure;
+we do not bias the random sample
+toward any of the structures,
+meaning that we will generally
+have more CV syllables
+than any other type in these experiments.
+Each randomly selected syllable
+has a semantic pointer,
+an ensemble in the associative memory,
+and a DMP network associated with it.
+The intrinsic frequency (speed)
+of each syllable is randomly assigned
+between 0.8 and 3.0 Hz,
+except where noted otherwise.
+For each trial,
+both the syllable repository
+and the length and order
+of the syllable sequence
+to be produced are randomly generated,
+in order to obtain robust metrics
+not biased toward certain syllables
+or sequences of syllables.
+Other model parameters are as listed in
+Table~\ref{tab:prod},
+unless otherwise noted.
+
+For each experimental condition,
+we ran 20 trials using
+a random sequence of three syllables
+from a repository of three random syllables,
+unless otherwise noted.
+We allow syllable repetitions to occur,
+but due to randomization,
+syllable repetitions are not guaranteed to occur.
+
+\begin{table}[ht!]
+  \begin{footnotesize}
+    \begin{center}
+      \begin{tabular}{lcl}
+        \toprule
+        Parameter & Default value & Part of model affected \\
+        \midrule
+        \texttt{sequence n\_per\_d} & 30 & SPA modules in Sequence net \\
+        \texttt{syllable\_d} & 48 & SPA modules in Sequence net \\
+        \texttt{n\_positions} & 7 & SPA vocabulary \\
+        \texttt{difference\_gain} & 15 & Working memories in Sequence net \\
+        \texttt{threshold\_memories} & True
+          & Associative memories in Sequence net \\
+        \texttt{sequencer n\_per\_d} & 400 & Ensembles in Sequencer net \\
+        \texttt{sequencer tau} & 0.05 & Timer ensemble in Sequencer net \\
+        \texttt{sequencer freq} & 1~Hz & Timer ensemble in Sequencer net \\
+        \texttt{reset\_time} & 0.85
+          & Timer to reset function in Sequencer net \\
+        \texttt{reset\_threshold} & 0.5
+          & Timer to reset function in Sequencer net \\
+        \texttt{reset\_to\_gate} & 0.65
+          & Reset to gate function in Sequencer net \\
+        \texttt{gate\_threshold} & 0.4 & Gate function in Sequencer net \\
+        \texttt{syllable n\_per\_d} & 600 & Syllable DMP ensembles \\
+        \texttt{syllable tau} & 0.02 & Syllable DMP recurrent connection \\
+        \texttt{syllable freq} & 1~Hz & Syllable DMP recurrent connection \\
+        \texttt{prod\_info threshold} & 0.3 & Production information net \\
+        \texttt{t\_release} & 0.14 s & Initial input length \\
+        \texttt{sequence} & No default & Syllable sequence \\
+        \texttt{repeat} & True & Syllable sequence generation \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+  \end{footnotesize}
+  \caption{Parameters used in the syllable sequencing and production model.}
+\label{tab:prod}
+\end{table}
+
+Since the dynamics of the DMP networks
+have a significant impact
+on the successful operation of the model,
+we begin by varying
+the time constant on
+the DMP state's recurrent connection.
+
+\fig{prod-tau}{0.9}{Varying DMP $\tau$ in production model.}{
+  Results for the sequencing and production experiment
+  in which we vary the $\tau$ parameter of each recurrent DMP
+  state ensemble.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+As can be seen in Figure~\ref{fig:prod-tau},
+accuracy is significantly above baseline
+until $\tau > 0.035$~s;
+poor accuracy is due to a proliferation
+of deletions,
+which are likely to due to some syllable DMPs
+not activating properly.
+Timing variance is generally low
+until $\tau \ge 0.04$~s.
+Timing means are negative,
+indicating that the model
+voices syllables faster
+than the original gesture score.
+Co-occurrence is significantly
+better than chance for all values of $\tau$.
+
+Next, as with the NCC model,
+we vary the number of neurons
+in different parts of the model
+to speed up subsequent experiments.
+Specifically, we vary the number of neurons
+used in each DMP network and
+the number of neurons used in the
+timing ensemble in the sequencing network.
+
+\fig{prod-syllneurons}{0.9}{
+  Varying number of DMP neurons in production model.}{
+  Results for the sequencing and production experiment
+  in which we vary the number of neurons in each recurrent DMP
+  state ensemble.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+As shown in Figure~\ref{fig:prod-syllneurons},
+the number of neurons in each DMP network
+does not have an obvious effect
+on the model as long as at least
+150~neurons per dimension are used.
+Since these networks implement
+the oscillatory dynamics, we hypothesized
+that using more neurons would
+increase accuracy;
+however, this hypothesis was not supported.
+If anything, accuracy decreased with
+high numbers of neurons.
+For subsequent simulations,
+600~neurons per dimension are used.
+
+\fig{prod-seqneurons}{0.9}{
+  Varying number of sequencer timing neurons in production model.}{
+  Results for the sequencing and production experiment
+  in which we vary the number of neurons in the timing ensemble
+  in the sequencer network (see Figure~\ref{fig:prod-network}).
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+Figure~\ref{fig:prod-seqneurons}
+shows the results of varying
+the number of neurons in the
+timer ensemble in the sequencer network.
+Unlike the number of neurons
+in DMP networks,
+increasing the number of neurons
+in the timer ensemble has
+more clear results.
+Using very few neurons
+(less than 30 per dimension)
+results in performance
+significantly worse than baseline.
+Increasing the number of neurons
+generally increases accuracy,
+up to the maximum number tested,
+1000~neurons per dimension,
+which is the value used
+in subsequent experiments.
+
+\subsubsection{Scaling to natural speech}
+
+With a reasonable set of parameters chosen,
+we focus on whether the model
+can scale to natural speech situations,
+which involve
+a large repository of syllables
+voiced rapidly.
+
+\fig{prod-freq}{0.9}{
+  Varying the speed of syllables in the production model.}{
+  Results for the sequencing and production experiment
+  in which we vary the frequency (i.e., speed) of
+  syllables in the syllable repository.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+First, we investigated the
+range of frequencies at which the model
+can produce accurate trajectories.
+In this experiment, we use a random sequence
+of three syllables from a
+repository of three random syllables
+with the same frequency.
+Figure~\ref{fig:prod-freq} shows the accuracy
+of the model as a function of the frequency.
+Interestingly, the model is least accurate
+for both low and high frequencies.
+At low frequencies, accuracy is around
+the baseline, with relatively high
+numbers of insertions,
+suggesting that the DMP networks
+may be activated more than once
+when the sequencer network
+is operating at slow speeds.
+Accuracy is better than baseline
+from around 2.5--6.5~Hz
+(i.e., syllables of 150--400~ms in length),
+which matches the range of frequencies
+often used in normal speech.
+The network starts to break down
+at higher frequencies,
+again with a relatively high number
+of insertions.
+
+\fig{prod-n_syllables}{0.9}{
+  Varying the syllabary size in the production model.}{
+  Results for the sequencing and production experiment
+  in which we vary the syllabary size
+  (i.e., the number of syllables in the syllable repository
+  of the model).
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+Next, we investigated whether the model
+behavior changes when the size
+of the syllabary changes.
+Since adults have a repository
+of hundreds or thousands
+of commonly uttered syllables,
+the size of the syllabary should have
+little effect on the model.
+However, as is shown in Figure~\ref{fig:prod-n_syllables},
+model accuracy decreases
+as the size of the syllabary increases,
+only being more accurate than baseline
+for up to four syllables,
+due to a sharp increase
+in the number of deletions.
+We have not yet determined the source
+of these deletions,
+but believe that the SPA modules
+are the source of poor performance,
+as we did not increase the dimensionality
+of the semantic pointers
+as the number of syllables increased.
+
+\fig{prod-sequence_len}{0.9}{
+  Varying the sequence length in the production model.}{
+  Results for the sequencing and production experiment
+  in which we vary the number of syllables
+  voiced in an experimental trial.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+In a similar vein,
+we investigated whether model behavior
+depends on the length of the syllable sequence,
+with the size of the syllabary fixed.
+In this case, we know from \citet{choo2010}
+that sequences of length five or greater
+tend to have difficulty with elements
+in the middle of the sequence.
+As shown in Figure~\ref{fig:prod-sequence_len},
+accuracy drops off after only four syllables.
+Interestingly, accuracy is also low
+for sequences of length one,
+due to increased deletions.
+
+\fig{prod-repeat}{0.9}{
+  Comparing repetitive and unique sequences in the production model.}{
+  Results for the sequencing and production experiment
+  in which we allow syllables to repeat,
+  or constrain the sequence to contain only unique syllables.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and co-occurrence metric.
+  The dotted line in the accuracy plot denotes
+  the baseline accuracy value,
+  which is the mean of the accuracy between all non-matched
+  syllables in the repository of 417 syllables;
+  the dotted line in the co-occurrence metric
+  denotes the metric obtained through random chance.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+Finally, to this point we have
+allowed syllables to repeat
+under the assumption that our network design
+(specifically the choice to use rhythmic DMPs)
+results in similar performance when
+repeating syllables compared to
+a sequence of unique syllables.
+Therefore, we investigated whether
+performance is impacted when
+sequences of length three
+are constrained to be unique.
+As can be seen in Figure~\ref{fig:prod-repeat},
+the model performs the same
+whether syllables are allowed to repeat or not,
+verifying our assumption.
+The only statistically significant difference
+between the model with repetitions
+versus no repetitions
+is that substitution are more likely
+to occur when repetitions are allowed.
+
+\subsubsection{Speech intelligibility}
+
+While manually checking the synthesized speech
+for each experimental trial
+would take a significant amount of time,
+it is nevertheless important
+to ensure that the gesture scores
+reconstructed from the model outputs
+can yield intelligible speech.
+
+To test this, we manually evaluated
+one set of experimental trials
+(specifically, those associated with
+the experiment varying the number of
+sequencer neurons,
+with 1000~neurons used).
+I and one other person evaluated
+the set of 20 utterances independently,
+and reevaluated utterances
+in which our evaluations differed.
+For the 20 trials,
+we found that
+almost all of them were cut off;
+that is, not all of the syllables
+in the sequence were present
+in the synthesized speech.
+This could be because the model
+was not run for a sufficient length of time,
+or because the last syllable DMP in the sequence
+did not activate
+despite the network running
+for a sufficient length of time.
+Regardless, since all trials
+contained sequences of three syllables,
+we compared the target synthesized syllables
+to the syllables that were present
+in the speech generated by the model.
+We found that
+\begin{itemize}
+  \item 7 utterances (35\%) were as intelligible as the target,
+  \item 8 utterances (40\%) were not as intelligible as the target,
+    but still resembled it, and
+  \item 5 utterances (25\%) were not intelligible.
+\end{itemize}
+
+The model, therefore,
+is capable of producing intelligible speech
+with syllable sequences of varying speed.
+
+\subsection{Scaling}
+\label{sec:res-prod-scaling}
+
+The number of neurons in the
+sequencing and production model is
+\begin{equation*}
+  N = N_{\text{SPA}} + N_S + N_{\text{DMP}} + N_O,
+\end{equation*}
+where these variables
+are the number of neurons in
+a subset of the model.
+$N_{\text{SPA}}$ is the number of
+neurons for all SPA modules,
+which is
+\begin{equation*}
+  N_{\text{SPA}} = 5 D(\text{SYLL}) N_{D(\text{SYLL})} +
+      |DFT_{\text{SYLL}}| N_{D(\text{SYLL})}
+      + 2 N_{\text{AM}} (3 |\text{SYLL}| + 1),
+\end{equation*}
+where $D(\text{SYLL})$ is the dimensionality
+of syllable semantic pointers,
+$N_{D(\text{SYLL})}$ is the number of neurons
+per syllable dimension,
+$|DFT_{\text{SYLL}}|$ is the number of
+discrete Fourier transform coefficients
+used by the binding operator,
+$N_{\text{AM}}$ is the number of neurons
+per associative memory ensemble,
+and $|\text{SYLL}|$ is the number of
+syllables in the syllabary.
+
+$N_S$ is the number of neurons
+in the sequencer network,
+which is
+\begin{equation*}
+  N_S = 4 N_{D(S)} + 140,
+\end{equation*}
+where $N_{D(S)}$ is the number of neurons
+per dimension in the sequencer network,
+and 140~neurons come from ensembles
+of fixed size.
+
+$N_{\text{DMP}}$ is the number of neurons
+in DMP networks, which is
+\begin{equation*}
+  N_{\text{DMP}} = 3 |\text{SYLL}| N_{|\text{DMP}|} + 40,
+\end{equation*}
+where $N_{|\text{DMP}|}$ is the number of neurons
+per DMP dimension,
+and 40~neurons come from ensembles of fixed size.
+
+$N_O$ is the number of neurons
+in production information ensembles, which is
+\begin{equation*}
+  N_O = 48 N_{|O|}
+\end{equation*}
+where 48 is the number of gestures,
+and $N_{|O|}$ is the number of neurons
+per production information ensemble.
+
+With the parameters used
+in the majority of the experiments above,
+$N$=22180 neurons,
+with most of those neurons
+in the SPA populations
+($N_{\text{SPA}}$=14200)
+and the DMP ensembles ($N_{\text{DMP}}$=5520).
+Fortunately, these parts of the model
+grow at a linear or sublinear rate
+as additional syllables are added
+to the syllabary.
+If we assume a conservative syllabary
+with around 1000 syllables,
+and increase the dimensionality
+of each syllable to 256,
+the model uses
+$N$=$2.2 \times 10^6$ neurons.
+If we assume a more generous estimate
+with 2000 syllables
+and use 512 dimensions
+per syllable semantic pointer,
+then the model uses
+$N$=$4.4 \times 10^6$ neurons.
+Given that there are approximately
+$2.7 \times 10^4$ neurons per mm$^3$ (on average)
+in human cortex \citep[BNID 112050]{milo2010},
+a human scale syllabary would take up
+approximately 163.7 mm$^3$ of cortex
+(0.1637 cm$^3$)
+in the generous case,
+which is a very small portion of cortex,
+especially considering that this model
+would be distributed over
+several cortical areas.
+
+\section{Syllable recognition}
+
+The goal of the syllable recognition system
+is to temporally classify syllables
+given a continuous trajectory
+of production information.
+We will evaluate the system
+based on its ability to emit
+correct and timely syllable classifications,
+and whether those classifications
+are available in working memory
+between classifications.
+
+\subsection{Evaluation}
+
+The infrastructure for evaluating
+the recognition model
+is similar to that of the production model.
+We use the same library
+of German syllable gesture scores,
+from which we create
+48-dimensional gesture trajectories.
+On each trial,
+we generate a trajectory
+by concatenating the trajectories
+of a randomly chosen sequence
+of trajectories together
+(i.e., we do not use the
+syllable production model
+to generate input for the model).
+That trajectory is provided
+to all of the iDMPs as input,
+and we record the output of the
+iDMP state ensembles
+and the memory module.
+
+From the data collected,
+we compute three metrics
+to evaluate performance
+in different situations.
+First, we calculate
+classification accuracy
+using the same formula
+as is used to calculate
+accuracy in the production model;
+specifically,
+we generate a list of all of the
+syllables classified by the model,
+and compare that list to the
+originally specified list
+using the formula
+\begin{equation*}
+  \text{Acc} = \frac{N_S - S - D - I}{N_S},
+\end{equation*}
+where $N_S$ is the number of syllables
+in the trajectory,
+$S$ is the number of substitutions,
+$D$ is the number of deletions,
+and $I$ is the number of insertions.
+A substitution occurs when
+the syllable is misclassified.
+A deletion occurs when
+a syllable trajectory has been followed,
+but the model does not emit a classification.
+An insertion occurs
+when the model emits a classification
+when a corresponding trajectory has not been followed
+(e.g., it classifies the same syllable twice).
+
+Second, we record the times at which
+syllable classifications occur,
+and compare those times
+to the end of the actual syllable trajectories.
+Here, we are attempting to determine
+if the model can classify syllables
+while they are being voiced,
+or if the entire syllable must complete
+before the classification can be made.
+
+Third, we analyze the contents
+of the memory module
+in between syllable presentations.
+Specifically,
+we find the semantic pointer
+with the maximum similarity
+to the memory representation
+at the midpoint between
+the start and the end of a syllable
+for all syllables in the trajectory
+(except the first,
+which cannot be remembered until it occurs).
+The memory representation of the trial
+is perfect if the
+previously classified syllable
+is in memory at the midpoint
+of the next syllable.
+
+\subsection{Experiments and results}
+
+\subsubsection{Basic model operation}
+
+First, we examine the operation
+of a model instance in detail
+to ensure that the metrics we collect
+adequately characterize
+good and bad model trials.
+
+Figure~\ref{fig:recog-good} shows
+a successful model trial
+recognizing the syllables
+\ipa{[blA ti dAs]};
+all syllables are voiced
+at around 2~Hz.
+The activities in various ensembles
+reflect the transformations
+and dynamics expected of the model,
+and result in
+perfect classification and memory accuracy.
+
+\fig{recog-good}{0.68}{
+  Successful example trial of recognition model.}{
+  Successful example trial of the syllable recognition model.
+  For iDMPs, the dimension representing the system state
+  is emphasized to illustrate state tracking.
+  See Figure~\ref{fig:recog-network} for the network structure
+  corresponding to the outputs plotted,
+  and text for more details.}
+
+\fig{recog-bad}{0.68}{
+  Unsuccessful example trial of sequencing and production model.}{
+  Unsuccessful example trial of the syllable recognition model.
+  For iDMPs, the dimension representing the system state
+  is emphasized to illustrate state tracking.
+  See Figure~\ref{fig:recog-network} for the network structure
+  corresponding to the outputs plotted,
+  and text for more details.}
+
+Figure~\ref{fig:recog-bad}
+shows an unsuccessful model trial
+recognizing \ipa{[blA ti dAs]}.
+In this case, while the initial
+\ipa{[blA ti]} syllables
+are recognized successfully,
+an erroneous additional
+\ipa{[ti]} classification occurs.
+Because of this erroneous classification,
+the iDMPs are reset when
+the \ipa{[dAs]} syllable begins,
+causing it to not be classified.
+Therefore, there are two correct
+classifications and one substitution
+(the \ipa{[dAs]} is replaced with the
+erroneous \ipa{[ti]})
+resulting in 66.7\% accuracy.
+
+\subsubsection{Determining model parameters}
+
+The basic experimental setup
+in the following experiments
+is similar to that of the production model.
+However, instead of using
+a sequence of syllables
+as input and producing
+a production information trajectory,
+the recognition model
+uses a production information trajectory
+as input and produces
+a sequence of syllable classifications.
+Again, for each trial in each experiment,
+we randomly select a set of syllables
+and a syllable sequence
+from which to generate a trajectory.
+The random selection process
+is the same as in the production model.
+The randomly selected
+gesture scores are combined
+into a single trajectory,
+and that trajectory
+is provided to the network
+through a Nengo node.
+The intrinsic frequency (speed)
+of each syllable is randomly assigned
+between 1.3 and 1.5~Hz,
+except where noted otherwise.
+For each experimental condition,
+we ran 20 trials using
+a trajectory made from
+three random syllables
+in a repository of three syllables,
+meaning that syllable repetitions can occur,
+but are not guaranteed.
+Wherever not specified,
+we use parameters are defined in
+Table~\ref{tab:recog}.
+
+\begin{table}[ht!]
+  \begin{footnotesize}
+    \begin{center}
+      \begin{tabular}{lcl}
+        \toprule
+        Parameter & Default value & Part of model affected \\
+        \midrule
+        \texttt{dimensions} & 64 & Associative memory \\
+        \texttt{threshold} & 0.9 & Associative memory \\
+        \texttt{wta\_inhibit\_scale} & 3 & Associative memory \\
+        \texttt{memory neurons\_per\_dimension} & 60 & Memory \\
+        \texttt{memory feedback} & 0.83 & Memory recurrent connection \\
+        \texttt{reset\_th} & 0.9 & Classifier ensemble \\
+        \texttt{inhib\_scale} & 1 & Classifier connections to iDMPs \\
+        \texttt{syllable n\_per\_d} & 1000 & Syllable iDMP ensembles \\
+        \texttt{syllable tau} & 0.05 & Syllable iDMP recurrent connection \\
+        \texttt{similarity\_th} & 0.82 & Syllable iDMP recurrent connection \\
+        \texttt{scale} & 0.71 & Syllable iDMP recurrent connection \\
+        \texttt{reset\_scale} & 2.5 & Syllable iDMP diff connection \\
+        \texttt{trajectory} & No default & Input trajectory \\
+        \texttt{repeat} & True & Input trajectory generation \\
+        \bottomrule
+      \end{tabular}
+    \end{center}
+  \end{footnotesize}
+  \caption{Parameters used in the syllable recognition model.}
+\label{tab:recog}
+\end{table}
+
+\fig{recog-similarity}{0.9}{
+  Varying the similarity threshold in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we vary the similarity threshold
+  in the function computed through the recurrent connections
+  on iDMP state ensembles.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+In the case of the recognition model,
+two parameters other than the number of neurons
+have the most significant effect on model behavior.
+First is the similarity threshold
+in Equation~\eqref{idmp-dynamics1}.
+As can be seen in Figure~\ref{fig:recog-similarity},
+classification accuracy peaks with
+similarity threshold around 0.8.
+Up to 0.8, the number of insertions
+is high, while after 0.8
+the number of deletions increases.
+Since insertions do not always harm
+the memory representation,
+memory accuracy is high
+up to the peak of around 0.82,
+at which point it sharply decreases.
+Insertions are difficult to avoid;
+however, deletions can be dealt
+with through other parameters,
+so we choose a similarity threshold of
+0.82 for subsequent experiments.
+
+\fig{recog-scale}{0.9}{
+  Varying the scale in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we vary the scale term
+  in the function computed through the recurrent connections
+  on iDMP state ensembles.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+The next parameter of interest is the
+scale on the iDMP system state dynamics
+($\alpha$ in Equation~\eqref{idmp-dynamics1}).
+As can be seen in Figure~\ref{fig:recog-scale},
+with similarity threshold of 0.82,
+the scale makes a smaller difference
+in classification and memory accuracy
+than does the similarity threshold.
+Deletions are likely up to
+a scale value to 0.8,
+after which insertions become more likely.
+Again, since deletions can be handled
+through other means,
+we err on the side of avoiding insertions,
+and choose a scale value of 0.71
+for subsequent experiments.
+
+\fig{recog-syllneurons}{0.9}{
+  Varying the number of iDMP state neurons in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we vary the number of neurons per dimension
+  in the iDMP state ensembles.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+Finally, we vary the number of neurons
+used in each iDMP network.
+As shown in Figure~\ref{fig:recog-syllneurons},
+the number of neurons in each iDMP network
+has a significant impact on the performance
+of the overall model.
+Classification accuracy is relatively low
+until around 300 neurons per dimension,
+and continues to increase
+to the maximum size attempted,
+1000 neurons per dimension.
+As the number of neuron increases,
+the probability of deletions decreases,
+as an ensemble with more neurons
+can better approximate Equation~\eqref{idmp-dynamics1}.
+Memory accuracy with 1000 neurons per dimension
+is especially high (nearly 90\%),
+so we use 1000 neurons per dimensions
+in subsequent experiments.
+Note that using more than 1000 neurons per dimension
+may give slight increases,
+but with 1000 neurons per dimension
+the number of deletions is already
+as low as the number of insertions
+and substitutions,
+implying that further improvements
+would be modest.
+
+\subsubsection{Scaling to natural speech}
+
+As in the production network,
+we next vary experimental parameters
+to examine how the model scales
+to more realistic speech.
+
+\fig{recog-freq}{0.9}{
+  Varying the trajectory frequency in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we vary the frequency
+  of the syllables that make up the input production information
+  trajectory.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+First, we investigated the
+range of frequencies in which the model
+can successfully classify trajectories.
+In this experiment, we use a random sequence
+of three syllables from a
+repository of three random syllables
+with the same frequency.
+Originally, we hypothesized that the
+model would be especially weak in this experiment,
+as the values for the similarity threshold
+and scale were chosen based on
+experiments with 1.3--1.5~Hz.
+As can be seen in Figure~\ref{fig:recog-freq},
+our hypothesis was correct in the sense that
+the recognition model
+is more sensitive to frequency changes
+than the production model.
+Classification accuracy is initially poor;
+however, this is due to a large number
+of insertions
+(likely insertions of the correct syllable).
+Maximal accuracy around 75\%
+occurs at 1.8~Hz,
+just above the frequency that we
+optimized for earlier.
+After 1.8~Hz, accuracy decreases
+as deletions become more common
+than insertions.
+The variance of the timing difference
+(i.e., when the classification occurs
+relative to the end of the syllable)
+is very small from about 1.4 Hz and above.
+The mean timing difference
+is negative for all frequencies,
+indicating that classifications
+occur before the syllable trajectory
+is complete.
+
+\fig{recog-n_syllables}{0.9}{
+  Varying the syllabary size in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we vary the size of the syllabary
+  from which we select three syllables to recognize.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+We then investigated whether the model
+behavior changes when the size
+of the syllabary changes.
+As shown in Figure~\ref{fig:recog-n_syllables},
+accuracy drops off quickly when
+more than five syllables
+are part of the syllabary.
+Unlike in the production system,
+this effect is predictable
+from the structure of the network,
+due to the competitive nature
+of the iDMPs;
+all iDMPs are constantly tracking
+the system state,
+except when a classification has occurred
+and the iDMP networks are inhibited.
+As the number of syllables in the repository increases,
+the chance of substitutions increases,
+as can be seen in Figure~\ref{fig:recog-n_syllables}.
+Memory accuracy, however, remains significantly
+above chance in all cases.
+
+\fig{recog-sequence_len}{0.9}{
+  Varying the sequence length in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we vary the number of syllables
+  selected from the syllabary and concatenated together
+  to make up the input trajectory.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Shaded regions represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+The length of the sequence,
+on the other hand,
+has little effect on classification accuracy,
+as can be seen in Figure~\ref{fig:recog-sequence_len}.
+In this case, the trajectories
+of the three syllables in the syllabary
+are repeated several times.
+The iDMP networks continue to operate
+at the same accuracy rate
+regardless of how long they have been active,
+which is a benefit of this method
+over HMMs, which must be renormalized
+and reset often.
+However, as seen in Figure~\ref{fig:recog-sequence_len},
+it may be the case that memory accuracy
+would decrease if the sequence length
+is increased further,
+due to the fact that the memory
+is implemented with a simple decaying integrator.
+If longer sequences prove to be problematic,
+it may be necessary to replace the memory
+with an input-gated working memory module,
+as is used in the production system
+for representing syllable positions.
+
+\fig{recog-repeat}{0.9}{
+  Comparing repetitive and unique sequences in the recognition model.}{
+  Results for the syllable recognition experiment
+  in which we allow syllables to repeat,
+  or constrain the trajectory to contain only unique syllables.
+  Plots show the accuracy, number of substitutions/insertions/deletions,
+  timing differences, and memory accuracy.
+  The dotted line in the memory accuracy plot denotes
+  the chance accuracy value, which depends on the syllabary size.
+  Error bars represent bootstrapped 95\% confidence intervals
+  from the 20 trials.}
+
+Finally, we verified that the model
+operates well in situations with
+sequences of unique or repeated syllables.
+As shown in Figure~\ref{fig:recog-repeat},
+the overall accuracy is indistinguishable
+whether repeated syllables are allowed or not.
+All other measure are within confidence intervals as well.
+
+\subsection{Scaling}
+\label{sec:res-recog-scaling}
+
+The number of neurons in the
+syllable recognition model is
+\begin{equation*}
+  N = N_{\text{in}} + N_{\text{SPA}} + N_{\text{iDMP}} + N_C,
+\end{equation*}
+where these variables
+are the number of neurons in
+a subset of the model.
+
+$N_{\text{in}}$ is the number of neurons
+in trajectory input ensembles, which is
+\begin{equation*}
+  N_{\text{in}} = 48 N_{|\text{in}|}
+\end{equation*}
+where 48 is the number of gestures,
+and $N_{|\text{in}|}$ is the number of neurons
+per input ensemble.
+
+$N_{\text{SPA}}$ is the number of
+neurons for all SPA modules,
+which is
+\begin{equation*}
+  N_{\text{SPA}} = 3 |\text{SYLL}| N_{\text{AM}}
+    + D(\text{SYLL}) N_{D(\text{SYLL})},
+\end{equation*}
+where $|\text{SYLL}|$ is the number of
+syllables in the syllabary,
+$N_{\text{AM}}$ is the number of neurons
+per associative memory ensemble,
+$D(\text{SYLL})$ is the dimensionality
+of syllable semantic pointers,
+and $N_{D(\text{SYLL})}$ is the number of neurons
+per syllable dimension.
+
+$N_{\text{iDMP}}$ is the number of neurons
+in iDMP networks, which is
+\begin{equation*}
+  N_{\text{iDMP}} = |\text{SYLL}| \left( \left(\overline{D}(\text{iDMP})
+  + 2 \right) N_{D(\text{iDMP})} + 20 \right),
+\end{equation*}
+where $\overline{D}(\text{iDMP})$ is the average
+number of gestures in each syllable,
+$N_{D(\text{iDMP})}$ is the number of neurons
+per iDMP dimension,
+and 40 neurons come from ensembles with fixed size.
+
+$N_C$ is the number of neurons
+in the classifier,
+which is $N_C = 20$.
+
+With the parameters used
+in the majority of the experiments above,
+$N\approx 30000$ neurons,
+with most of those neurons
+in the iDMP populations
+($N_{\text{iDMP}}\approx 22000$).
+Note that these values are approximate
+because the number of gestures per syllable
+varies depending on the syllable,
+which is randomly selected.\footnote{
+  If we did not sparsify the syllable representation,
+  then we would be using all 48 gesture dimensions.
+  Typically, $\overline{D}(\text{iDMP})$ is around 6--7,
+  which is a significant savings in terms
+  of neural resources used.}
+Like the production model,
+the number of resources
+grows linearly with the number of syllables.
+However, it should be noted that the
+linear growth is scaled by
+$N_{D(\text{iDMP})}$,
+the number of neurons per iDMP dimension,
+which we chose as 1000 through the experiments above.
+If we assume a conservative syllabary
+with around 1000 syllables,
+and increase the dimensionality
+of each syllable to 256,
+the model uses
+$N \approx 7.86 \times 10^6$ neurons,
+which is more than the generous
+estimate for the production model.
+If we assume a more generous estimate
+with 2000 syllables
+and 512 dimensions
+for syllable semantic pointers,
+then the model uses
+$N \approx 1.64 \times 10^7$ neurons.
+The estimate represents approximately
+606 mm$^3$ of cortex (0.606 cm$^3$),
+which is still a small amount
+considering the size of the brain areas
+involved in sensorimotor integration,
+but represents poorer scaling
+than the other two models presented in this thesis.

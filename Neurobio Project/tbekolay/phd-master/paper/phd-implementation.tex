@@ -1,0 +1,1865 @@
+\chapter{Implementation}
+\label{chapt:implementation}
+
+In this thesis, we implement and evaluate
+three neural models that make up
+parts of the conceptual Sermo model.
+Each model provides
+an explanation for how the human brain might
+solve a task necessary for
+speech recognition or synthesis
+using the computational devices at hand,
+namely spiking neurons.
+
+\section{Neural cepstral coefficients (NCCs)}
+\label{sec:ncc}
+
+\probbox{A raw audio waveform has high temporal resolution,
+  but low spatial resolution, as it is a one-dimensional signal.
+  Audio must therefore be preprocessed such that
+  temporal information in the recent past
+  is projected into some feature space
+  at the current moment in time.
+  Automatic speech recognition systems preprocess speech by
+  extracting feature vectors containing cepstral coefficients.
+  How can a neural model like Sermo preprocess speech?}
+
+The frontend of most automatic speech recognition systems
+extracts a feature vector from the incoming audio waveform.
+As reviewed in Section~\ref{sec:prev-mfcc},
+Mel-frequency cepstral coefficients (MFCCs)
+have been used successfully in many ASR systems.
+To a certain extent, MFCCs are motivated
+by the organization of the human auditory system.
+We propose neural cepstral coefficients (NCCs)
+as an alternative feature vector representation
+for automatic speech recognition
+and other tasks involving speech processing.
+Unlike MFCCs, NCCs are both motivated
+by the organization of the human auditory system
+and are implemented the same basic computational units
+as the human auditory system, spiking neurons.
+
+\subsection{Model overview}
+
+\fig{ncc}{0.45}{Neural Cepstral Coefficient pipeline.}{
+  Pipeline for generating neural cepstral coefficients (NCCs),
+  compared to MFCCs.
+  While the NCC pipeline initially appears to be simpler,
+  the missing components from the MFCC pipeline
+  are instead incorporated into parts of the NCC pipeline;
+  e.g., the logarithmic compression is part of the
+  auditory periphery model.
+  No explicit smoothing and normalization
+  step is necessary,
+  as signals will be smoothed and normalized
+  in the NCC model by virtue of being represented
+  by spiking neurons, and filtered by
+  the synaptic filters between neurons.}
+
+Figure~\ref{fig:ncc} shows the NCC processing pipeline,
+as compared to the MFCC processing pipeline.
+While the pipelines implement
+essentially the same computations,
+the manner in which those computations
+are performed differs significantly.
+The primary difference is that
+in the NCC pipeline,
+incoming audio is processed
+in a continuous online fashion,
+rather than in a frame-based fashion.
+Typical MFCC extraction algorithms
+break the audio signal into
+overlapping fixed-length windows
+called frames,
+which are processed independently
+until the smoothing stage,
+where discontinuities
+due to frame boundaries are
+minimized.
+The NCC extraction algorithm,
+on the other hand,
+maintains internal state
+at each processing stage,
+and updates that internal state
+for each incoming audio sample.
+As each internal state update
+depends on the current state,
+changes occur smoothly through time,
+which obviates the need for
+an explicit smoothing step.
+
+Another implementation difference
+is in the computation of
+the inverse discrete cosine transform.
+Typically, this computation is done as
+\begin{equation*}
+  y_k = \frac{x_0}{\sqrt{N}} + \sqrt{\frac{2}{N}} \sum_{n=1}^{N-1}
+  x_n \cos \left( \frac{\pi}{N} n \left( k + \frac{1}{2} \right) \right)
+  \text{ for } 0 \le k < N,
+\end{equation*}
+where $y_k$ is the $k$th cepstral coefficient,
+$x_n$ is the $n$th auditory filter output,
+and $N$ is the number of auditory filter outputs.
+In matrix notation,
+this equation can be expressed as
+\begin{align} \label{idct}
+  \V{k} &= \left[ 0, 1, \ldots, N-1 \right] & 1 \times N \text{ vector} \nonumber \\
+  \V{s} &= \left[ \sqrt{2}, 1, 1, \ldots, 1 \right] & 1 \times N \text{ vector} \nonumber \\
+  \V{T} &= \sqrt{2}{N} \, \V{s} \circ \cos \left( \frac{\pi}{N} \left(
+    \V{k} + \frac{1}{2} \right) \otimes \V{k} \right)
+    & N \times N \text{ matrix} \nonumber \\
+  \V{y} &= \V{T}\V{x} & N \times 1 \text{ vector}
+\end{align}
+where $\circ$ is the Hadamard (element-wise) product,
+and $\otimes$ is the outer product.
+This rearranged equation
+allows us to precompute a matrix, $\V{T}$,
+that maps auditory filter outputs
+directly to cepstral coefficients,
+enabling us to embed this matrix
+in the connection weights between
+two ensembles
+(see Figure~\ref{fig:ncc-network}).
+By restricting $\V{T}$
+to the first $M$ rows,
+Equation~\eqref{idct} yields the first
+$M$ cepstral coefficients;
+typically, ASR systems
+use $N\ge26$ auditory filter outputs
+and $M=13$ cepstral coefficients.
+
+\subsection{NCC neural model}
+\label{sec:ncc-neural}
+
+The NCC pipeline is implemented
+in a Nengo network that uses
+the Brian Hears library
+of auditory filter models
+\citep{fontaine2011},
+and two layers of
+leaky integrate-and-fire (LIF) neuron ensembles
+connected in a feed-forward manner
+(see Figure~\ref{fig:ncc-network}).
+While Brian has the capability
+to simulate spiking neurons,
+we only use Brian's implementation of
+auditory periphery models,
+which do not emit spikes.
+These models,
+summarized in Section~\ref{sec:periphery-models},
+emulate the effect of the
+audio waveform on the basilar membrane,
+and the resulting inner hair cell activity
+arising from basilar membrane deflections.
+The auditory periphery model
+also includes rectification and compression,
+and therefore accomplishes a significant portion
+of the MFCC extraction pipeline,
+which is unsurprising as MFCC extraction
+is designed to emulate certain aspects
+of the human auditory system.
+
+\fig{ncc-network}{1.0}{Neural Cepstral Coefficient network.}{
+  Network diagram for the neural cepstral coefficient model.
+  A bank of auditory filters processes incoming sounds,
+  projecting their output to an ensemble
+  for each auditory filter.
+  Those ensembles are connected to ensembles
+  representing cepstral coefficients
+  through the linear $\V{T}$ matrix,
+  which implements the inverse discrete cosine transform.
+  Ensembles representing cepstral coefficients
+  are projected to networks that compute
+  the temporal derivative of the coefficient.
+  Both the cepstral coefficient and derivative network outputs
+  are concatenated together to form
+  the final output feature vector.}
+
+The simulation timesteps
+for the Nengo model and the contained
+Brian auditory filter model
+are uncoupled.
+The auditory filter model
+is always run with the same timestep
+as the auditory stimulus;
+that is, its internal state is updated
+for each audio sample.
+The Nengo model, on the other hand,
+runs at a timestep independent
+of the auditory stimulus.
+On each Nengo timestep,
+therefore, one or more samples
+of the audio input
+is fed through the
+auditory filter model.
+The \textit{auditory nerve} ensembles
+receive as input the current
+state of the auditory filter model,
+regardless of how many timesteps
+the Brian model has advanced.
+
+The \textit{auditory nerve} ensembles
+mimic the activity of spiral ganglion cells
+projecting down the auditory nerve.
+For each characteristic frequency,
+a heterogeneous population of neurons
+is driven by the current output of
+the auditory filter model.
+Each characteristic frequency
+drives an independent neural ensemble,
+meaning that this layer of ensembles
+can be thought of as being cochleotopically organized,
+as the mean activity of an individual neuron
+only gives information about the output
+of a single auditory filter
+(although that filter may be modulated
+by power in nearby frequencies).
+Together, the decoded output of
+each ensemble gives an approximation of
+the compressed power in the part of the spectrum
+that the auditory filter is sensitive to.
+This quantity is essentially
+the output of the auditory filter
+(i.e., the first three steps in the MFCC pipeline),
+but now represented in
+cochleotopically organized spiking neurons.
+It is also the $\V{x}$ vector in
+the inverse discrete cosine transform
+(Equation~\eqref{idct}).
+
+The \textit{cepstra} ensembles
+each represent one cepstral coefficient.
+The inverse discrete cosine transform
+for that coefficient is computed
+through the connections between
+the auditory nerve ensembles
+and the cepstral ensembles.
+Specifically, the connection
+between each auditory nerve ensemble
+and each cepstrum ensemble
+scales the decoded value of the
+auditory nerve ensemble by
+the corresponding value
+the $\V{T}$ matrix.
+Since this is a linear transform,
+it is done by computing
+normal decoding weights
+according to equation~\eqref{eq:linear-trans}
+and scaling the decoders by $\V{T}_{i,j}$.
+Since the currents coming from
+multiple connections to an ensemble
+are summed, the cepstral ensembles
+end up representing the
+dot product between the row of
+$\V{T}$ that corresponds to its cepstrum
+and the $\V{x}$ vector,
+which is collectively represented
+by the auditory nerve ensembles.
+
+The end result of the networks
+is the decoded output
+of the \textit{cepstra} ensembles,
+which is a continuously varying,
+automatically smoothed set of cepstral coefficients.
+We hypothesize that these coefficients can be used
+as the feature vectors in an
+automatic speech recognition system.
+
+\subsection{Delta neural cepstral coefficients}
+
+Another common technique in designing frontends
+for automatic speech recognition is to
+include temporal derivatives
+in the feature vector.
+Appending MFCC derivatives
+to the feature vector
+(also known as MFCC velocities,
+or Delta-Cepstral Coefficients [DCCs])
+improves ASR accuracy.
+Appending derivatives of the MFCC derivatives
+(also known as MFCC accelerations,
+or Double Delta-Cepstral Coefficients [DDCC])
+further improves recognition,
+though by a smaller margin than
+the improvement from the first derivative
+\citep{furui1986,kumar2011}.
+
+Temporal derivatives in these systems
+are typically computed through straightforward
+finite differences.
+That is, for an MFCC $y_k$
+at frame $t$, the corresponding delta is
+\begin{equation*}
+  \label{dcc}
+  \delta_k(t) = \frac{\sum_{n=1}^N y_k(t+n) - y_k(t-n)}{
+    2 \sum_{n=1}^N n},
+\end{equation*}
+where $N$ is a small number of frames
+(typically between one and three).
+The double delta applies the same operation
+to the $\delta_k$ vectors.
+
+\subsection{Delta NCC neural model}
+\label{sec:impl-deriv}
+
+Implementing temporal differentiation
+in spiking neural networks
+is not as straightforward as implementing
+Equation~\eqref{dcc} in neurons,
+as the neural simulation operates
+online in continuous time,
+and therefore does not automatically
+have access to the information
+from previous timesteps.
+However, there are several ways
+to build networks that maintain
+information from the past
+and can therefore implement temporal differentiation.
+
+\citet{tripp2010} describes six such models,
+two of which use feedforward connections,
+two use adaptive neuron models,
+and two implement linear time-invariant (LTI) filters
+through recurrent connections.
+All six models successfully
+compute a temporal derivative,
+so for simplicity we implement
+the two feedforward temporal differentiation models,
+with the assumption that
+more sophisticated temporal differentiation
+models could be used if desired.
+
+\fig{tripp}{0.8}{Feedforward temporal differentiation from \citet{tripp2010}.}{
+  Two feedforward temporal differentiation models from \citet{tripp2010}.
+  (Left) Implementing temporal differentiation
+  with an intermediate ensemble.
+  (Right) Implementing temporal differentiation
+  with no additional ensembles,
+  but two connections between two ensembles
+  with different synaptic filters.
+  See text for more details.
+  Adapted from \citet{tripp2010}.}
+
+In the first feedforward differentiation model,
+an intermediate ensemble is introduced
+between the ensemble representing the input signal
+and the ensemble that we want to represent
+the derivative of the input signal
+(see Figure~\ref{fig:tripp}, left).
+The \textit{out} ensemble
+receives direct positively scaled input from
+the \textit{in} ensemble,
+and delayed negatively scaled input from
+the \textit{d} ensemble.
+The slight delay between the positive signal
+communicated from the \textit{in}
+and the negative signal
+from the \textit{d} ensemble
+results in the \textit{out} ensemble
+representing the temporal derivative
+of the input signal.
+
+Information transmitted between two ensembles
+is slightly delayed
+because changes to the input currents
+of the first ensemble
+must first be integrated for one or more
+timesteps before those changes can result in
+spikes that influence
+the second ensemble's input currents.
+The amount of time between
+when input signal changes are reflected
+in the first and second populations
+depends on several factors,
+including the simulation timestep,
+the neuron model, and the synaptic filter model.
+In the feedforward differentiation model
+with an intermediate ensemble,
+all connections use a lowpass filter
+with a relatively long time constant
+($\tau=0.1 \text{ s}$)
+as the synaptic filter model.\footnote{
+  Synaptic filter time constants of around 100 ms
+  are consistent with NMDA glutamate receptors,
+  which \citet{young2003} have suggested
+  are part of differentiator circuits
+  underlying respiratory rhythm.
+  Additionally, in terms of
+  the biological plausibility of the network as a whole,
+  \citet{tripp2010} note that this form of network
+  has been observed in \textit{C. elegans}
+  \citep{dunn2004} and may underlie chemotaxis.}
+
+In the second feedforward differentiation model,
+two connections are made between
+the \textit{in} and \textit{out} ensembles.
+The first positively scaled connection
+uses a synaptic filter with a fast time constant
+($T_1=0.005 \text{ s}$),
+and the second negatively scaled connection
+uses a synaptic filter with a slow time constant
+($T_2=0.1 \text{ s}$).\footnote{
+  Synaptic filter time constants of 5 ms
+  are consistent with some types of
+  AMPA receptors \citep{jonas1993}.}
+Like the first model,
+this approach exploits the delays introduced
+by synaptic filtering,
+subtracting a more slowly changing signal
+from a signal changing quickly,
+resulting in a temporal derivative.
+While this network has the advantage
+of requiring fewer neurons
+as no intermediate connection is introduced,
+it adds the constraint that
+the neurons in the \textit{out} ensemble
+contain both fast and slow
+neurotransmitter receptors.\footnote{
+  Since AMPA and NMDA are both glutamate receptors,
+  no constraint is placed on the \textit{in} ensemble.
+  \citet{tripp2010} note that a derivative circuit
+  in the vestibular system of oyster toadfish
+  \citep{holstein2004}
+  is likely to match the form of the second
+  feedforward differentiation model.}
+
+These differentiator networks
+are added to the NCC network
+(see Figure~\ref{fig:ncc-network})
+to compute the desired derivative.
+The cepstral coefficients and derivatives
+are finally concatenated together
+in a final step to produce
+the NCC feature vector.
+
+\section{Syllable sequencing and production}
+
+\probbox{Once the intention to voice a syllable sequence
+  has been formed, the motor system must translate
+  a sequence of conceptual syllable representations
+  to a continuous trajectory of motor commands
+  that will cause muscle activations in the vocal tract.
+  How can a neural model like Sermo generate
+  a motor command trajectory from
+  a symbolic syllable sequence representation?}
+
+We base our model on the linguistic theory
+that the speech production system
+is organized at the level of syllables,
+and that production information trajectories
+are explicitly stored
+for syllables that are frequently voiced.
+In this neural model,
+we describe how sequences of syllables are represented
+and iterated through with specific timing,
+and how those representations
+generate production information trajectories
+that can control an articulatory synthesizer.\footnote{
+  Parts of the model described in this section were created
+  in collaboration with Bernd Kr\"{o}ger.
+  A preliminary version of this model was presented
+  in \citet{kroger2014}.}
+We employ several modules in the semantic pointer architecture
+to iterate through the syllable sequence,
+and use DMPs to generate production information trajectories.
+We propose a novel combination of an associative memory
+and a set of DMP networks
+that we call a
+\textit{temporal output associative memory}.
+
+\subsection{Model overview}
+\label{sec:impl-prod-overview}
+
+In order to construct a network of modules
+from the semantic pointer architecture,
+we must first define the vocabulary of
+pointers used by the model,
+and how those pointers will be transformed.
+First, we randomly generate a pointer
+for each syllable in the model.
+In order to represent sequences of syllables,
+we generate semantic pointers
+to tag each syllable with its place
+in the list,
+as was done in \citet{choo2010}.
+Specifically, a syllable sequence is defined as
+\begin{equation*}
+  \text{SEQ} = \text{SYLL1} \bind \text{POS1} \oplus
+    \text{SYLL2} \bind \text{POS2} \ldots,
+\end{equation*}
+where each string of capital letters and numbers
+is a unique vector interpreted as a semantic pointer
+(see Section~\ref{sec:methods-spa}).
+For example, the word ``Sermo''
+(\ipa{/s3rmoU/})
+would be represented as
+\begin{equation*}
+  \text{SERMO} = \text{S3R} \bind \text{POS1} \oplus
+    \text{MOU} \bind \text{POS2}.
+\end{equation*}
+Representing a syllable sequence
+by binding syllables to list positions
+allows us to query the sequence
+for its constituent syllables,
+as was done in \citet{choo2010,eliasmith2012}.
+For example, to query the model
+for the first syllable,
+we can bind the sequence semantic pointer
+with the inverse of the first position pointer.
+\begin{equation*}
+  \text{S3R} \approx \text{SERMO} \bind \text{POS1}^{-1}
+\end{equation*}
+
+The semantic pointers representing syllable positions
+are constructed such that subsequent positions
+are the result of binding a position with
+a randomly generated $\text{NEXTPOS}$ pointer.
+For example,
+\begin{equation*}
+  \label{nextpos}
+  \text{POS2} = \text{POS1} \bind \text{NEXTPOS}
+\end{equation*}
+The initial position, $\text{POS1}$,
+and semantic pointers for each syllable
+are also randomly generated.\footnote{
+  Syllable semantic pointer could be constructed to
+  reflect how the syllable is produced; e.g.,
+  it could have a representation like
+  $\text{BA} = \text{B} \bind \text{ONSET} \oplus
+    \text{A} \bind \text{NUCLEUS}$,
+  where semantic pointers for the individual phonemes
+  and syllable parts are randomly generated.
+  However,
+  as we will show in the remainder of this section,
+  we do not need this information to
+  produce syllables.
+  Therefore, we deliberately do not impose
+  any structure on the syllable semantic pointers
+  in this model because we anticipate
+  that higher-level linguistic subsystems in Sermo
+  will dictate the features of the syllable
+  that must be contained
+  in the syllable semantic pointer representation.}
+Throughout the simulation,
+the current syllable to be voiced
+is computed by binding the sequence
+with the current position pointer; i.e.,
+\begin{equation*}
+  \text{SYLL} = \text{SEQ} \bind \text{CURRPOS}^{-1},
+\end{equation*}
+where $\text{CURRPOS}$ starts as $\text{POS1}$
+and changes over the course of the simulation
+by binding with the $\text{NEXTPOS}$ pointer
+when each syllable has been voiced.
+
+Since the binding operation ($\bind$)
+compresses multiple vectors into
+a single vector of the same length,
+the binding operation cannot be used
+to bind together
+an arbitrary number of semantic pointers.
+In \citet{eliasmith2012},
+it was shown that a similar network
+could represent lists with six elements accurately;
+elements in the middle of
+lists with seven or more elements
+were sometimes unable to be queried.
+Our choice of syllable sequence representation,
+therefore, sets a soft upper bound of six
+on the number of syllables in a sequence.
+We therefore predict that the
+linguistic systems producing
+syllable sequences to be voiced
+will look ahead less than
+six syllables.
+
+Each syllable semantic pointer
+is associated with a
+trajectory generation subsystem
+based on dynamic movement primitives
+(DMPs; \citealp{schaal2006,dewolf2015}).
+DMPs allow for reliable trajectory generation
+that can be temporally scaled,
+allowing for syllables to be voiced
+quickly or slowly.
+Each DMP generates a trajectory
+of vocal tract gestures,
+which are then mapped to
+motor commands that cause
+muscle activations in the vocal tract.
+
+Traditionally, DMPs can be either discrete or rhythmic,
+depending on whether the trajectory
+is followed repetitively.
+Since syllables are voiced
+one after another in typical speech,
+a discrete DMP would seem to be
+the obvious choice;
+however, it is possible for
+the same syllable to be voiced
+twice in a row,
+and some forms of singing
+feature rhythmic repetitions
+of the same syllable,
+necessitating the use of rhythmic DMPs.
+
+Using rhythmic DMPs
+means that when a syllable
+is only voiced once,
+it must be explicitly stopped
+once the DMP traverses
+its limit cycle once.
+At the same time,
+the DMP for the next syllable must begin,
+or have already begun.
+We accomplish this precise timing
+by detecting when the current syllable
+is nearing completion
+and starting a control network
+that transitions smoothly
+between the currently active syllable
+and the next active syllable.
+When a syllable is repeated,
+the end result should appear as though
+the limit cycle continued undisturbed.
+The implementation of this network
+depends heavily on neural inhibition,
+and therefore will be discussed
+in Section~\ref{sec:impl-prod-neuralmodel}.
+
+As reviewed in Section~\ref{sec:methods-dmp},
+DMPs typically consist of a point attractor
+and a forcing function.
+Currently, we do not implement
+separate point attractors for each DMP,
+and instead assume that all DMPs
+have the same point attractor,
+whose stable point is
+to have no active vocal tract gestures.
+The forcing function for each DMP
+generates a sequence of temporally coordinated
+vocal tract gestures
+that are defined manually.\footnote{
+  We assume that these vocal tract gesture sequences
+  would be learned through babbling and imitation phases,
+  as are modeled in DIVA and the Kr\"{o}ger model.
+  We leave the incorporation of this learning process
+  into the Sermo model as future work.}
+
+\subsection{Neural model}
+\label{sec:impl-prod-neuralmodel}
+
+\fig{prod-network}{0.7}{Syllable sequencing and production network.}{
+  \footnotesize
+  Network diagram for the syllable sequencing and production model.
+  Lines terminated with lines, rather than arrowheads,
+  represent inhibitory connections.
+  The \textbf{sequence network} iterates through
+  syllable positions in interconnected
+  working memory modules (ovals represent SPA modules),
+  which are switched through a connection from
+  the sequencer network.
+  Syllable positions are bound with the
+  sequence and cleaned up through
+  associative memories to represent
+  the current and next syllable targets.
+  DMPs associated with those syllable targets
+  are disinhibited by the associative memories.
+  The \textbf{sequencer network} receives input
+  from all DMPs in order to keep track
+  of the timing of the current syllable.
+  When the current syllable is nearly finished,
+  the reset ensemble is activated,
+  resetting all disinhibited DMPs to
+  their initial position.
+  Working memory gates are switched
+  when the reset ensemble activates
+  and deactivates.
+  When the reset ensemble is active,
+  the timer is advanced through a
+  recurrent connection with a
+  separate ensemble, which is normally inhibited.
+  \textbf{DMP networks} are primarily composed of
+  an oscillator which represents
+  the two-dimensional canonical system state.
+  Production information trajectories
+  are decoded from the system state
+  and projected to the production information network.
+  Input from associative memories
+  disinhibit the oscillator;
+  input from the reset ensemble in the
+  sequencer reset the oscillator to an initial position.
+  The DMP must be both disinhibited and
+  driven to the initial position
+  to generate a production information trajectory.
+  The \textbf{production information network}
+  aggregates information from all DMP networks.}
+
+SPA modules implemented in Nengo are used
+to robustly iterate through
+the syllable sequence list.
+The input sequence is represented
+in a \textit{state} module,
+which does not modify the sequence.
+The current and next position pointers
+is tracked by two interconnected
+\textit{working memory} modules,
+as was done in \citet{eliasmith2012}.
+The current syllable is computed
+by binding the \textit{state}
+with the inverse of the
+current pointer represented
+in \textit{working memory};
+similarly for the next pointer,
+which is stored in another
+working memory module.
+Both the current and next syllable
+representations are cleaned up with
+\textit{associative memories}.
+While the cleaned up semantic pointer
+associated with syllables are available,
+they are not used;
+instead, the activity of the ensemble
+that is associated with the syllable
+disinhibits the oscillator
+associated with a DMP network
+whose forcing function
+follows the production information trajectory
+for that syllable.
+A timing network that we call
+a \textit{sequencer} ensures
+that only one syllable DMP
+is active at one time,
+and that syllables transition
+immediately and smoothly.
+See Figure~\ref{fig:prod-network}
+for an illustration.
+
+\subsubsection{SPA modules}
+
+Networks for representing semantic pointers
+and doing common cognitively relevant
+manipulations on those pointers
+have been previously created
+for Spaun.
+This model uses those networks
+as described in \citet{eliasmith2013}.
+
+The binding modules compute
+circular convolution,
+implemented as multiplication
+in the Fourier domain.
+The design of these networks
+is described in more detail in
+\citet{choo2010}.
+
+The working memory modules
+maintain a memory trace
+through recurrent connections
+implementing an integrator.
+While the general design of the working memory
+is described in more detail elsewhere
+\citep{choo2010},
+how the two working memory modules
+interact warrants further explanation.
+In order to calculate the next position,
+we require the current position
+(see Equation~\eqref{nextpos}).
+The straightforward approach
+of computing this in a single recurrent loop
+from one working memory to itself
+fails because one of the two pointers
+being used in the computation
+is also the result of the computation.
+To remedy this situation, we exploit the fact that
+each working memory module is gated
+such that it operates in two regimes.
+In the ``acquisition'' regime,
+the memory module acquires a state to be remembered.
+In the ``maintenance'' regime,
+the memory module ignores incoming state information,
+and maintains a memory of the last state
+encountered in the first regime.
+The two working memory modules
+are connected to each other,
+and are always in the opposite regime.
+Initially, the first memory
+acquires the $\text{POS1}$ state
+from an external source.
+The gating signal turns on,
+which sets the first memory
+into the maintenance regime,
+representing the $\text{POS1}$ state.
+This simultaneously sets the second memory
+into the acquisition regime,
+where it acquires the state
+being maintained by the first memory
+($\text{POS1}$ initially).
+The second memory is connected
+to the input of the first memory
+such that it computes the
+next position in the connection,
+and therefore is providing
+$\text{POS2}$ as input to the first memory,
+though it is currently ignoring it.
+When the gating signal is released,
+the two memories switch regimes.
+The second memory maintains
+its memory of $\text{POS1}$
+and therefore projects $\text{POS2}$
+to the first memory,
+while the first memory acquires
+the $\text{POS2}$ state from the second memory.
+This process repeats for each position
+in the syllable sequence;
+each time the gating signal
+is turned on and off,
+the position pointer
+in the first working memory increments.
+
+This method of incrementing the position pointer
+is both robust and fast.
+It takes less than 50 ms to acquire
+a new memory state,
+and that state can be maintained
+for several seconds.
+Since syllables take
+on the order of hundreds of milliseconds
+to be voiced,
+the circuit can go through a syllable sequence
+fast enough for natural conversation.
+However, one aspect of the circuit as described
+poses a timing challenge.
+As discussed in Section~\ref{sec:impl-deriv},
+there is a slight transmission delay
+when sending a signal between two ensembles.
+Yet, humans are capable of producing
+continuous speech with
+few to no discernible pauses between syllables.
+Therefore, the next syllable to be voiced
+must follow the current syllable very quickly,
+even overlapping when appropriate.
+The \textit{sequencer} network,
+discussed below, facilitates this.
+
+The associative memories
+map possibly noisy input pointers
+to clean output pointers.
+While the input pointers
+can be associated with arbitrary
+output pointers,
+in our case inputs and outputs
+are the same syllable pointers;
+this is called an autoassociative memory,
+or a cleanup memory.
+These memories contain an ensemble
+for each semantic pointer
+in the vocabulary;
+the ensemble is responsible for computing
+the similarity between
+that semantic pointer
+and some input signal.
+This computation is carried out
+through the connection between
+the ensemble representing the input signal
+and the ensemble representing
+the similarity to the desired pointer.
+The weights on this linear connection
+are set to be the semantic pointer itself;
+the encoding process (see Equation~\eqref{eq:encoding})
+therefore computes the dot product
+between the desired semantic pointer
+and the input signal.
+Since semantic pointers are not necessarily
+orthogonal to each other,
+more than one ensemble may activate
+for a given input signal.
+In order to clean up to a single
+output semantic pointer,
+all of the ensembles
+representing semantic pointer similarity
+mutually inhibit one another.
+As long as the semantic pointers
+are sufficiently dissimilar
+to each other,
+this mutual inhibition
+implements a winner-take-all function,
+resulting in only a single ensemble
+being active: the ensemble
+representing similarity for the
+semantic pointer most similar to the input signal.
+
+\subsubsection{DMP networks}
+\label{sec:impl-dmp}
+
+The rhythmic DMP networks
+generate repetitive
+production information trajectories.
+The networks are based on
+the general design
+presented in \citet{dewolf2015},
+with some modifications
+to enable interactions between
+the DMP networks
+and the SPA modules
+by way of the sequencer network.
+
+The core of the network
+is an oscillatory ensemble
+that represents the system state.
+As the oscillator traverses
+the limit cycle,
+the multidimensional forcing function
+is decoded from the system state,
+resulting in the predefined
+production information trajectory
+playing out as
+the oscillator's angle moves from $0$ to $2\pi$.
+The ability to drive the oscillator
+at different frequencies
+enables the DMP to generate trajectories
+at different timescales.
+
+The forcing function of each DMP
+interpolates a vector representation of
+a manually defined
+vocal tract gesture score over time.
+The gesture scores are
+designed to be used with the VocalTractLab
+articulatory synthesizer
+\citep{birkholz2006,birkholz2013}.
+While a full speech production system
+would also include a mapping from
+the gesture score to
+vocal tract parameter changes
+(i.e., Sermo's motor expansion system),
+we leave the neural implementation
+of this mapping as future work,
+and instead automatically generate
+a gesture score from the neurally generated
+vector representation over time,
+which can then be synthesized
+by VocalTractLab.
+
+We have made two modifications
+to the DMP network design
+in \citet{dewolf2015}
+to allow multiple DMPs
+to operate in quick succession.
+The first modification
+is that the oscillator is inhibited
+by default.
+Usually, the oscillatory ensemble
+has intercepts distributed away from zero,
+causing a ``dead zone'' in the part of the
+two-dimensional vector space represented
+by the ensemble.
+The dead zone forces the initial input
+to the oscillator
+to be strong enough
+to kick it out of its dead zone;
+however, it eliminates the problem
+of the oscillator randomly
+oscillating without receiving input.
+While the DMP networks used in this model
+still have a dead zone,
+we also include additional explicit inhibition
+because the signal that
+starts the oscillator is provided
+to all DMPs simultaneously.
+All DMPs receive this signal
+for efficiency and scalability reasons.
+The inhibitory signal is inhibited
+(and thus the oscillator is disinhibited)
+by the syllable similarity ensembles
+associated with the DMP
+in the two associative memories,
+which requires around 400 synaptic connections
+if the memory and inhibitory ensembles
+contain 20 neurons each.
+The alternative would be to
+set up a routing network
+that would route the oscillator starting signal
+to the correct oscillators depending on
+the state of the two associative memories.
+While such a routing network can be implemented,
+it would take more neurons and connections
+to implement than the approach used here,
+and may introduce delays that
+would be detrimental to smooth sequencing.
+
+The second modification is a more robust
+method for starting the oscillator.
+Previously, we noted that the DMP's oscillator
+requires a start signal to begin
+the oscillation.
+Typically, this signal is a short pulse
+of driving force pushing the oscillator
+toward a part of the state space;
+in our case, we aim to push the oscillator
+to $[-1, 0]$, or $\theta=\pi$.
+With a short pulse of driving force,
+the oscillator typically does not
+make it to $[-1, 0]$ exactly,
+as the intrinsic dynamics of the oscillator
+quickly take over,
+beginning the oscillation.
+Additionally, the pulse
+must be presented for a sufficiently short time
+such that it does not affect
+the oscillator state as it traverse
+its limit cycle.
+
+In order to overcome the limitations
+of the usual starting pulse,
+we instead continuously drive
+the oscillator to the target state
+until the starting pulse is released.
+To implement this continuous drive,
+we add an additional ensemble
+to the DMP which receives input
+from the oscillator
+and provides output to the oscillator;
+the output to the oscillator
+computes the difference between
+the current oscillator state
+and the target state,
+which in our case is $[-1, 0]$.
+Like the oscillator itself,
+we only want this difference
+to be computed when the start pulse
+is active.
+Therefore, we provide an
+inhibitory signal to the differencing ensemble,
+which is inhibited by
+the starting pulse,
+effectively disinhibiting the differencing ensemble
+and driving the oscillator
+to the $[-1, 0]$ state.\footnote{
+  Note that we set the goal state of the
+  differencing ensemble to be the target state
+  plus a small vector that counteracts the
+  intrinsic dynamics of the oscillator.
+  Since those dynamics depend on the frequency
+  of oscillation, the vector added depends
+  on the DMP's frequency (i.e., speed).
+  Currently, we use oscillators with
+  fixed frequency and therefore add a fixed vector
+  to the target state.
+  If controlled oscillators are used,
+  it would be ideal to also modify
+  the vector accordingly,
+  though the gain in accuracy may not be significant.}
+Since the differencing signal is active
+as long as the starting pulse is active,
+the start pulse effectively ``resets''
+the oscillator to the target state
+until the pulse is released,
+at which point it starts
+traversing the limit cycle.
+We therefore overcome the issues with
+the starting pulse,
+as the oscillator will be driven
+to the target state even
+with the intrinsic dynamics,
+and the timing pulse can
+last as long as is needed,
+though its timing is still critical
+for natural speech trajectories.
+
+\subsubsection{Sequencer network}
+
+The structure of the SPA modules
+and the modifications to the DMP networks
+described to this point
+allow the two associative memories
+to disinhibit the rhythmic DMPs
+associated with the current and next syllables.
+All that remains is to generate
+the timing signals that switch
+the regimes of the working memories,
+and that drive any disinhibited DMPs
+to the target initial state.
+The sequencer network
+accomplishes these two functions.
+
+The main idea of the sequencer network
+is that we keep track of
+how far along we are in the
+production of a syllable,
+and when we are sufficiently
+close to being done producing a syllable,
+we initiate the starting pulse
+and transition to producing
+the next syllable.
+Note that this assumes that
+only one syllable can be the
+``active'' syllable at any one time,
+but syllables can still
+blend into one another
+during the time of
+the starting pulse.
+
+The core of the sequencer network
+is a \textit{timer} ensemble
+that receives input from
+all of the rhythmic DMP ensembles.
+If the assumption that
+at any given time
+only one syllable is active holds,
+then the timer ensemble effectively
+represents the state of the oscillator
+for the currently active syllable.
+The timer is used to
+switch the regimes of the working memories,
+and to initiate the starting pulse
+for the next syllable.
+As it turns out, the timing
+of these two signals is strongly linked;
+the ideal time to switch the regimes
+of the working memories
+is right after the timing pulse starts,
+and right after it ends.
+This timing is ideal because
+we want both associative memories
+to emit the ``next'' syllable
+during the starting pulse,
+but for the ``current'' and ``next'' syllables
+to be disinhibited for the rest
+of the time so that when the next
+starting pulse occurs,
+the next syllable is already disinhibited
+and ready to be voiced,
+rather than needing to be disinhibited
+before it can be driven by the starting pulse.
+
+Note, however, that we aim to
+have a slight delay between
+when the timing pulse starts
+and when the working memory switch occurs,
+as the switch will effectively
+inhibit the ``current'' syllable,
+which we wish to be active
+while the next syllable is being
+driven to the initial state.
+Since the current syllable's trajectory
+is bringing it near the initial state,
+the additional drive resulting
+from the starting pulse
+does not adversely affect the
+trajectory.\footnote{
+  If the trajectory is adversely affected,
+  then the forcing function can be modified
+  such that the predefined trajectory is
+  warped in time to accommodate for the
+  increased speed at the end of the trajectory.}
+Similarly, we aim to switch
+the working memories again
+slightly before the starting pulse ends
+to limit the amount of time
+that the previous and current syllables overlap.
+Unlike phonemes, syllables are not
+typically coarticulated;
+the overlap that we achieve by the
+delay between the timing pulse
+and the first working memory switch
+is to reduce the delay between
+successive syllables,
+not necessarily to allow them
+to coarticulate,
+though some slight overlap is possible.
+
+\subsubsection{Temporal output associative memory}
+
+We refer to
+the combination of an associative memory,
+and DMP networks
+for each input-output pair in the memory
+as a temporal output associative memory.
+Since we use sequences of syllables
+as an input, we use the sequencer network
+to control sequence timing;
+however, temporal output associative memories
+can also be used in other situations,
+including those that allow for
+motor synergies to be
+flexibly weighted rather than using
+an all-or-nothing strategy
+as is done with syllables.
+The key innovation here is
+the association of
+a possibly noisy semantic pointer
+with an arbitrary time-varying trajectory.
+Many applications of this kind of association
+can be seen in human behavior;
+here, we associate static syllable representations
+with production information trajectories
+that will drive a motor system
+to produce that syllable over time.
+A similar mapping could produce
+other types of motor behavior
+(e.g., a reach)
+from static representations
+of cognitive intentions.
+
+\section{Syllable recognition}
+\label{sec:impl-recog}
+
+\probbox{Speech production information is decoded
+  from integrated auditory
+  and non-auditory sensory information.
+  Yet, we perceive the continuous production information
+  trajectory as a single speech unit.
+  How can we recognize a trajectory of production information
+  as having been produced by a syllable target?}
+
+Syllable recognition is in many ways
+the inverse of syllable production.
+Rather than expand a discrete, static representation
+to a continuous, dynamic one,
+we do the opposite and collapse
+a continuous, dynamic representation
+to a discrete, static one.
+As such, we theorize that the
+trajectory classification aspect of
+the sensorimotor integration system
+is also organized at the level of syllables.
+We propose a syllable recognition network
+using a novel technique based on DMPs,
+which we call
+inverse dynamic movement primitives
+(iDMPs).
+We use iDMPs to recognize production information trajectories,
+and then connect these iDMPs
+to associative memories
+in order to produce semantic pointer representations
+for recognized syllables.
+We call the novel combination of
+iDMPs and associative memories
+\textit{temporal input associative memories}
+to emphasize the similarities
+between the syllable production
+and recognition systems.
+
+\subsection{Model overview}
+\label{sec:impl-recog-overview}
+
+The first part of the model
+recognizes incoming production information trajectories
+with inverse DMPs (iDMPs).
+Recall that in the DMP framework,
+the state of the system
+is represented by $x(t)$,
+and the motor trajectory
+is generated by defining
+a forcing function $f(x(t)) = \V{y}(t)$
+that emits the motor trajectory
+for that point in the state space.
+In the discrete case,
+the intrinsic dynamics
+of the state act
+as a one-dimensional ramp;
+in the rhythmic case,
+the intrinsic dynamics
+of the state act
+as a two-dimensional oscillator.
+
+In iDMPs, we aim to learn the inverse function,
+which maps from the motor trajectory
+back to the system state that generated that
+trajectory; i.e., we aim to approximate
+$g(\V{y}(t)) = x(t)$.
+Unfortunately, we cannot do this approximation directly
+as there is no guarantee of a one-to-one mapping
+from $x(t)$ to $\V{y}(t)$;
+i.e., the same motor command can occur
+at multiple points in the trajectory.
+Therefore, we use an approach
+inspired by HMMs and GVF
+(see Section~\ref{sec:prev-classification})
+to approximate this function.
+
+The basic idea of iDMPs
+is that we keep track of our
+current estimate of the system state,
+$\hat{x}(t)$,
+and gate the dynamics
+of the system state estimate
+to progress only when the input
+(i.e., an observation, $\V{O}(t)$)
+is sufficiently close to what we believe
+the observation should be
+(i.e., a prediction $\hat{\V{y}}(t) = f(\hat{x}(t))$).
+We assume that the
+forcing function $f$ is known.
+Then, we define a similarity function
+to compare the observation to
+the prediction; specifically,
+\begin{equation}
+  \label{idmp-similarity}
+  s(\hat{\V{y}}(t), \V{O}(t)) =
+    \frac{\hat{\V{y}}(t) \cdot \V{O}(t)}
+    {\Vert\hat{\V{y}}(t)\Vert \Vert\V{O}(t)\Vert},
+\end{equation}
+where $\cdot$ is the dot product
+and $\Vert\cdot\Vert$ is the L2-norm.
+
+Recall that the intrinsic dynamics
+of a discrete DMP are
+\begin{equation*}
+  \dot{x} = \alpha,
+\end{equation*}
+and the intrinsic dynamics
+of a rhythmic DMP are
+\begin{align*}
+  \dot{x_1} &= -2 \pi f x_2 \\
+  \dot{x_2} &= 2 \pi f x_1.
+\end{align*}
+In the iDMP,
+we have estimates of the actual system state,
+and we gate the dynamics
+of the estimate by the similarity measure.
+Given some similarity threshold
+$th_s$, the discrete case of an iDMP
+has dynamics
+\begin{equation} \label{idmp-dynamics1}
+  \dot{\hat{x}} =
+  \begin{cases}
+    0 & \text{if } s(\hat{\V{y}}(t), \V{O}(t)) < th_s \\
+    \alpha & \text{if } s(\hat{\V{y}}(t), \V{O}(t)) \ge th_s,
+  \end{cases}
+\end{equation}
+and the rhythmic case of an iDMP
+has dynamics
+\begin{align}
+  \label{idmp-dynamics2}
+  \dot{\hat{x_1}} &=
+  \begin{cases}
+    0 & \text{if } s(\hat{\V{y}}(t), \V{O}(t)) < th_s \\
+    -2 \pi f x_2 & \text{if } s(\hat{\V{y}}(t), \V{O}(t)) \ge th_s,
+  \end{cases} \nonumber \\
+  \dot{\hat{x_2}} &=
+  \begin{cases}
+    0 & \text{if } s(\hat{\V{y}}(t), \V{O}(t)) < th_s \\
+    2 \pi f x_1 & \text{if } s(\hat{\V{y}}(t), \V{O}(t)) \ge th_s.
+  \end{cases}
+\end{align}
+
+Note that,
+like other trajectory recognition algorithms,
+each iDMP is associated with
+a specific trajectory,
+and therefore we require
+as many iDMPs as we have syllables
+in our vocabulary.
+Also like the GVF algorithm,
+iDMPs can be considered a ``tracking'' algorithm,
+as the underlying state is continuously estimated.
+Classification can therefore be done flexibly
+depending on the characteristics
+of the trajectories in the vocabulary.
+Classification can be done when
+any iDMP's state passes some classification threshold,
+(e.g., when $\hat{x}(t) > 0.9$ in the discrete case).
+It can be done on an ad hoc basis,
+essentially querying the set of iDMPs
+for which is most likely at that moment in time
+(i.e., $\argmax{\hat{X}(t)}$).
+It can also be done when one iDMP
+is sufficiently farther along than
+all other iDMPs.
+
+It is important to note that
+the $\alpha$ and $f$ parameters
+used in the iDMP cannot be chosen
+in the same way as in DMPs.
+In DMPs,
+the $\alpha$ and $f$ parameters
+control how quickly
+the DMP is moving through
+the state space,
+and therefore controls
+the temporal scale
+of the trajectory.
+In the iDMP, however,
+$\alpha$ and $f$ stay fixed,
+and instead represent
+the maximum speed that
+we expect the iDMP to
+move through the state space,
+or perhaps slightly higher than
+the maximum speed.
+If $\alpha$ and $f$ are too low
+and the estimated state
+lags behind the actual state,
+then the predictions will
+diverge from the observations,
+leading to poor tracking
+(false negatives).
+If $\alpha$ and $f$ are too high,
+then the iDMP may advance
+too far in the state space,
+making an improper classification
+(false positives).
+Choosing a good $\alpha$ or $f$
+is critical to the success of an iDMP.
+
+While we believe that the iDMP
+is well suited to a wide range
+of trajectory classification problems,
+it is especially useful for syllables
+because it allows for
+the onset of the syllable to
+be the dominant factor
+in differentiating between
+another syllable with the same nucleus,
+but no onset.
+For example, if the input is a trajectory
+from the syllable \ipa{[bAr]},
+the iDMP for \ipa{[bAr]}
+will be further along in the state space
+than the iDMP for \ipa{[Ar]}.
+However, an issue arises
+for codas,
+in that the iDMP for \ipa{[bA]}
+will be farther along than
+\ipa{[bAr]} when the \ipa{[r]}
+is encountered.
+We will refer to this as the
+\textit{trajectory subpath} problem.
+The best solution to the
+trajectory subpath problem depends on
+the characteristics of the trajectories
+in the vocabulary.
+In the case of syllables,
+we solve the trajectory subpath problem
+by introducing competition
+between iDMPs with
+common trajectory subpaths
+(see \ref{sec:impl-recog-neural} for more details).
+
+In the syllable recognition model,
+a discrete iDMP is associated
+with each syllable in the vocabulary.
+Each syllable is also associated
+with a randomly generated semantic pointer,
+which should be the same semantic pointer
+used by the syllable production system
+to produce that syllable.
+
+\subsection{Neural model}
+\label{sec:impl-recog-neural}
+
+\fig{recog-network}{0.7}{Syllable recognition network.}{
+  \footnotesize
+  Network diagram for the syllable recognition model.
+  Lines terminated with lines, rather than arrowheads,
+  represent inhibitory connections.
+  The \textbf{trajectory input} consists of
+  an ensemble for each possible gesture.
+  One connection is made from each ensemble
+  to each iDMP state ensemble.
+  If the iDMP corresponds to a syllable
+  that uses that gesture,
+  then it projects to a dimension of that iDMP.
+  If the iDMP corresponds to a syllable
+  that does not use that gesture,
+  then it projects to the system state
+  of the iDMP with a negative weight.
+  Each \textbf{iDMP network} is primarily composed of
+  a large recurrently connected state ensemble.
+  The state ensemble's recurrent connection
+  predicts an observation given the current system state,
+  and advances the state if the actual observation
+  is sufficiently close to the prediction.
+  The system state can be pushed toward its initial state
+  if incorrect gestures are encountered.
+  The classifier ensemble inhibits
+  the state ensemble once a classification is made.
+  State output is also projected to
+  an associative memory.
+  The \textbf{associative memory} takes input
+  from all iDMPs in order to emit
+  a semantic pointer corresponding to
+  classified syllables.
+  The associative memory projects
+  to a recurrently connected memory module
+  that attempts to remember
+  the last syllable encountered.}
+
+The spiking neural implementation of
+the syllable recognition model
+is organized much like the production model,
+but in reverse.
+Each syllable has an associated
+iDMP network that aims to recognize
+that syllable.
+The output of each iDMP is associated
+with an ensemble in
+an SPA associative memory,
+which produces a cleaned up version
+of the semantic pointer
+associated with the recognized syllable.
+The cleaned up version of the semantic pointer
+is projected to a memory module,
+which remembers the recognized syllable
+for a short while in order to
+make it available to other networks.
+Finally, a temporal classification
+ensemble is used to monitor the
+state of the associative memory
+and reset the iDMP state ensembles
+once a classification has been made.
+See Figure~\ref{fig:recog-network}
+for the overall structure.
+
+\subsubsection{iDMP networks}
+
+The iDMP associated with each syllable
+is similar in structure to the DMPs
+described in Section~\ref{sec:impl-dmp}.
+The core of the iDMP network
+is an ensemble that represents
+the estimated state of the dynamical system.
+A recurrent connection
+from the state to itself
+implements the dynamics
+that updates the estimated state
+based on the current observation
+and prediction
+(see Equations~\eqref{idmp-dynamics1}
+and~\eqref{idmp-dynamics2}).
+
+Despite the production network using rhythmic DMPs,
+we use discrete iDMPs for syllable recognition.
+A significant amount of effort is taken
+in the production network to ensure that
+the 2D oscillators are reset at the correct time.
+With iDMPs, we cannot be as precise about time,
+as we are estimating the system state;
+it can even be advantageous
+to be less concerned about exact time,
+as it can allow the iDMP to classify a trajectory
+before it is complete.
+As such, we are essentially collecting evidence
+to increase our confidence that the
+observations come from the same syllable
+that the iDMP is created from;
+integrating that evidence over time
+is naturally done with a one-dimensional integrator,
+as is used in the discrete iDMP.
+Additionally, since we do not need to emit
+a classification immediately after
+the last one (we must first accumulate
+trajectory evidence)
+we can safely spend some milliseconds
+resetting all iDMP states
+once a classification is made.
+
+We implement the discrete dynamics
+from Equation~\eqref{idmp-dynamics1}
+in a single recurrent connection.
+Typically,
+Nengo models that compute the dot product
+(as is done in Equation~\eqref{idmp-similarity})
+do so by computing each 2D product separately,
+as the product is a nonlinear function
+that can be difficult to optimize
+in high-dimensional spaces.
+However, initial experimentation
+showed that the exact dynamics equation
+could be well approximated
+in a single connection
+as long as the observation
+and prediction were reduced in dimensionality.
+In general, this could be done
+with any number of statistical dimensionality
+reduction techniques;
+however, in the case of production information,
+the vector space already has
+orthogonal basis functions
+(there is no coupling between gestures),
+and each syllable uses
+relatively few dimensions
+(usually between four and seven).
+Therefore, for each syllable,
+we only explicitly represent
+the dimensions of the space
+that are actually used for that syllable.
+With this dimensionality reduction,
+we found that a recurrent connection
+specifying exactly Equation~\eqref{idmp-dynamics1}
+was approximated well enough
+to do trajectory recognition in most cases.
+
+The fact that we implement the dynamics
+in one recurrent connection
+implies that the ensemble
+represents both the system state
+and the observation dimensions
+of interest to that syllable.
+In other words, the state can have
+up to eight dimensions for complex syllables.
+In our case,
+even when high accuracy is required,
+the number of neurons needed
+is reasonable given some assumptions
+about adult vocabularies;
+see Section~\ref{sec:res-prod-scaling}
+for more details.
+
+In the previous section, we discussed
+the trajectory subpath problem,
+which occurs when two syllables
+start with the same trajectory
+but diverge near the end
+(e.g., \ipa{[bA]} versus \ipa{[bAr]}).
+In order to handle this problem,
+we introduce an additional connection
+in the model that explicitly punishes
+gestures that are not
+part of the iDMP's syllable.
+One method to do this would be to
+negatively weight any gestures
+not part of the current syllable
+in the recurrent connection;
+however, reducing the dimensionality
+of the observation space makes
+this impossible.
+Instead, we introduce a small \textit{reset} ensemble
+in the iDMP that drives
+the system state back to the initial state
+whenever a gesture that is not part
+of the syllable is active.\footnote{
+  The reset ensemble is similar to the reset ensemble
+  in the syllable production model
+  in its implementation and use,
+  in addition to its name.}
+This ensemble is normally inhibited,
+but an inhibitory connection is made
+from the input signal to the reset ensemble
+such that any gesture
+not part of the syllable will
+disinhibit the reset ensemble,
+pushing the iDMP state back to the initial state.
+As long as the target trajectories
+are normalized to the same length,
+punishing these gestures should
+mitigate the trajectory subpath problem
+in most cases.\footnote{
+  It should be noted that humans
+  are not necessarily adept at
+  disambiguating trajectory subpath issues;
+  consonant phonemes can be interpreted
+  as being part of the coda of one syllable
+  or the onset of the subsequent syllable
+  in many syllable sequences.
+  The form of syllable recognition
+  explained by this model would
+  be influenced by linguistic systems,
+  or used primarily in sensorimotor situations
+  like learning to voice new syllables
+  and recognizing infrequently heard syllables
+  in a foreign language.}
+
+As an added benefit,
+punishing gestures not in the syllable helps
+differentiate between syllables with
+similar trajectory suffixes;
+e.g., \ipa{[bAr]} versus \ipa{[dAr]}.
+Without punishing extra gestures,
+it is more likely that the iDMP
+associated with \ipa{[dAr]} will catch up
+to the \ipa{[bAr]} iDMP
+and result in a misclassification
+if the parameters in the model
+are not well-tuned.
+
+\subsubsection{SPA modules}
+
+The associative memory is a standard
+SPA associative memory,
+mapping from a set of input semantic pointers
+to a set of output semantic pointers.
+In the recognition model, however,
+we do not provide any semantic pointer input;
+instead, we use the iDMP networks
+to drive the ensembles associated
+with each syllable semantic pointer directly.
+Specifically, the dimension or dimensions
+representing the system state
+are connected to the similarity sensitive ensembles.
+
+One benefit of using the associative memory
+is that it separates the state tracking function
+of the iDMP networks
+from the winner-take-all mutual inhibition
+of the associative memory,
+which makes the iDMP network easier to implement.
+Another important benefit is that
+it provides a location for
+sensorimotor information
+(provided by the iDMPs)
+to integrate with top-down
+linguistic information.
+Since neurons naturally sum
+input from multiple sources,
+the ensembles representing syllable similarity
+can receive input from both sources,
+and achieve faster or more correct classification
+as a result.
+
+The mutual inhibition and thresholding options
+are critical to the proper functioning
+of the associative memory
+in the recognition model.
+Figure~\ref{fig:recog-network} shows
+the mutual inhibition in the associative memory network.
+When mutual inhibition and thresholding are used,
+the second layer of ensembles
+in the associative memory
+only become active if
+the first layer of ensembles
+(those that represent semantic pointer similarities)
+are sufficiently active.
+Thresholding is implemented by
+setting ensemble properties in the second layer
+to have encoders of $[1]$,
+and x-intercepts that start around or above
+the chosen threshold.
+In doing so, the second layer of ensembles
+will only become active if the
+first layer ensemble associated with it
+crosses that threshold.
+
+In addition to the associative memory module,
+which identifies a unique syllable semantic pointer
+once the iDMP associated with it has crossed threshold,
+the model contains a memory module
+that maintains a decaying memory
+of that pointer.
+The memory is implemented as an ensemble
+for each set of 16 subdimensions
+of the semantic pointer
+(which is 64 dimensional in this model).
+Each ensemble is recurrently connected
+with a weight less than 1
+so that the syllable most recently classified
+is remembered for a few hundred milliseconds,
+which is around the amount of time that we expect
+for the next classification to take place.
+Using a recurrent weight
+with weight less than 1
+is critical in this case,
+as if the memory used recurrent connections
+with weight 1,
+all of the syllable pointers
+encountered in the past would be
+superimposed on one another.
+Therefore, we assume that
+only the most recent syllable classified
+is of interest to downstream systems.
+
+\subsubsection{Temporal classification}
+
+The final part of the model is
+a small \textit{classifier} ensemble
+that resets the iDMP states
+when a classification is made.
+It receives input from all of the
+second (thresholded) layer of ensembles
+in the associative memory.
+When the classifier ensemble is active,
+it directly inhibits
+all of the iDMP state ensembles.
+
+Like the thresholded layer,
+the classifier ensemble's
+x-intercepts are distributed
+near or above a certain threshold;
+critically, this threshold
+is slightly above the threshold
+in the associative memory.
+The difference between these two thresholds
+results in a slight delay between
+when the associative memory
+output becomes active,
+and when the classifier ensemble becomes active.
+The associative memory
+must be active long enough to provide
+semantic pointer input to the
+memory module,
+which will maintain a memory of that pointer
+once the iDMP states are inhibited
+by the classifier ensemble.
+
+Since the classifier directly inhibits
+all of the iDMPs, any neural activity in this population
+will have a large deleterious effect
+on the classification of the current syllable,
+and so we aim to completely inhibit
+the iDMP once the classifier becomes active.
+However, since the classifier inhibits
+an ensemble that provides it input,
+its activity will quickly cease.
+In order to ensure that its short burst of activity
+is sufficient to completely reset
+the iDMP states,
+we change two parameters from their defaults.
+First, we use synaptic time constants
+that are longer than usual on the connections
+from the associative memory to the classifier,
+and from the classifier to the iDMPs;
+specifically, the time constant is 100 ms,
+which is consistent with some NMDA receptors
+\citep{sah1990}.
+Second, we use a different neuron model.
+All other ensembles mentioned in this thesis
+are composed of leaky integrate-and-fire neurons.
+In the classifier ensemble,
+we use an adaptive leaky integrate-and-fire neuron model
+\citep{koch1998}.
+While a true bursting neuron model
+would be better,
+the adaptive LIF at least will produce
+more spikes given
+sporadic input compared to constant current.
+
+It is worth pointing out that the
+classifier ensemble does not use the
+iDMP reset mechanism to reset the state,
+unlike the connection punishing
+syllables that are not part of the gesture.
+The primary reason is that the reset mechanism
+is too slow to fully reset the state
+in the span of time that the classifier ensemble
+is active.
+The punishment mechanism cannot use inhibition
+because it must only affect the system state,
+not the representation of the observations,
+which are represented in the same ensemble.
+When resetting the iDMP, however,
+the observations are ignored anyhow,
+so inhibiting the ensemble
+is acceptable.
+
+It is also worth explicitly stating
+that this method of temporal classification
+accumulates experience and classifies
+once the estimated state of one iDMP
+passes a threshold.\footnote{
+  This type of decision making is reminiscent
+  of the well known drift diffusion model
+  that has been used to model
+  human behavior in two-alternative forced choice tasks
+  \citep{bogacz2006}.}
+While this classification method
+is straightforward to implement,
+it may make arbitrary choices
+when two syllables are similar,
+as the representations resulting
+from spiking neural networks are noisy.
+More sophisticated classification methods
+could be employed using
+iDMPs to track estimated system states.

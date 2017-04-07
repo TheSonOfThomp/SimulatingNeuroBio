@@ -1,0 +1,56 @@
+# For LaTeX
+*.aux
+*.glo
+*.idx
+*.log
+*.toc
+*.ist
+*.acn
+*.acr
+*.alg
+*.bbl
+*.blg
+*.dvi
+*.glg
+*.gls
+*.ilg
+*.ind
+*.lof
+*.lot
+*.maf
+*.mtc
+*.mtc1
+*.out
+*.synctex.gz
+
+# For Mac OS X
+.DS_Store
+
+# For Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# For doit
+.doit.db
+
+# Outputs
+paper/phd.pdf
+
+# Emacs stuff
+paper/auto/
+
+# Jupyter stuff
+.ipynb_checkpoints/
+
+# Project specific
+*.wav
+cache/
+
+# Figure stuff
+plots/
+figures/**/*.pdf
+figures/**/*.ipynb
+presentation/fig
+presentation/reveal.js
+presentation/index.html
