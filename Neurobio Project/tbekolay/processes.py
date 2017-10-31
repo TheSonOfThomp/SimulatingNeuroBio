@@ -134,6 +134,9 @@ class Tone(FuncProcess):
         self.amplitude = _rms * np.sqrt(2)
 
     def func(self, t):
+        plt.figure()
+        plt.plot(self.amplitude * np.sin(2 * np.pi * t * self.freq_in_hz))
+        plt.show()
         return self.amplitude * np.sin(2 * np.pi * t * self.freq_in_hz)
 
 
